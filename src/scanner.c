@@ -16,7 +16,7 @@ void scanner_init(const char * source)
 {
 	scanner.start = source;
 	scanner.current = source;
-	uint16_t line = 1;
+	scanner.line = 1;
 }
 
 void scanner_free()

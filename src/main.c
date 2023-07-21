@@ -75,7 +75,8 @@ char * read_file(const char * path)
 		exit(74);
 	}
 
-	size_t f_size = fseek(source_file, 0, SEEK_END);
+	fseek(source_file, 0L, SEEK_END);
+	size_t f_size = ftell(source_file);
 	rewind(source_file);
 
 	char * buffer = malloc(sizeof(char) * f_size + 1);
@@ -98,7 +99,3 @@ char * read_file(const char * path)
 	return buffer;
 }
 
-InterpretResult interpret(const char * source)
-{
-	compile(source);
-}

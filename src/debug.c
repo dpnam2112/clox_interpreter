@@ -1,8 +1,15 @@
 #include "debug.h"
 #include "chunk.h"
 
+uint16_t current_line;
+bool line_change;
+
 void disassemble_chunk(Chunk * chunk, const char * name)
 {
+	// Initialize bytecode logger's state
+	current_line = 1;
+	line_change = false;
+
 	printf("== %s ==\n", name);
 	for (int offset = 0; offset < chunk->size;)
 	{
@@ -51,8 +58,10 @@ int line_number(Chunk * chunk, int offset)
 {
 	uint16_t line;
 	memcpy(&line, &(chunk->bytecodes[offset + 1]), 2);
-	printf("%-16s %u\n", "LINE_NUMBER", line);
-	printf("LINE %u:\n", line);
+	printf("%-16s\n", "META_LINE_NUM");
+	current_line = line;
+	line_change = true;
+	
 	return offset + 3;
 }
 
@@ -60,6 +69,17 @@ int disassemble_inst(Chunk *chunk, int offset)
 {
 	printf("%04d ", offset);
 	uint8_t inst = chunk->bytecodes[offset];	// Get the instruction
+
+	if (line_change)
+	{
+		printf("%03d ", current_line);
+		line_change = false;
+	}
+	else
+	{
+		printf("  | ");
+	}
+
 	switch (inst)
 	{
 		case OP_RETURN:

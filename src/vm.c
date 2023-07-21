@@ -2,6 +2,7 @@
 #include "chunk.h"
 #include "debug.h"
 #include "value.h"
+#include "compiler.h"
 
 VM vm;
 
@@ -121,4 +122,23 @@ InterpretResult vm_interpret(Chunk * chunk)
 	vm.chunk = chunk;
 	vm.pc = chunk->bytecodes;
 	return run();
+}
+
+InterpretResult interpret(const char * source)
+{
+	Chunk chunk;
+	chunk_init(&chunk);
+
+	if (!compile(source, &chunk))
+	{
+		chunk_free(&chunk);
+		return INTERPRET_COMPILE_ERROR;
+	}
+
+	vm.chunk = &chunk;
+	vm.pc = chunk.bytecodes;
+
+	InterpretResult result = run();
+
+	chunk_free(&chunk);
 }

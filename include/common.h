@@ -9,5 +9,6 @@
 
 ///* Configurations */
 //#define DBG_TRACE_EXECUTION
+#define BYTECODE_LOG
 
 #endif
