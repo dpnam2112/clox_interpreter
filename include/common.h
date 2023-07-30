@@ -9,6 +9,7 @@
 
 ///* Configurations */
 //#define DBG_TRACE_EXECUTION
-#define BYTECODE_LOG
+//#define DBG_DISASSEMBLE
+//#define BYTECODE_DUMP
 
 #endif

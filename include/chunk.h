@@ -26,6 +26,16 @@ typedef enum
 	OP_RETURN,
 	OP_NEGATE,	// Negate the top value of the vm's stack and return the negated value
 	OP_EXIT,	// Exit program
+	OP_AND,
+	OP_OR,
+	OP_NOT,
+
+	OP_TRUE,
+	OP_FALSE,
+	OP_NIL,
+	OP_LESS,
+	OP_GREATER,
+	OP_EQUAL,
 
 	/* Simple arithmetic operations: addition, subtraction, multiplication, division
 	 * these instructions take two values on the top of the vm's stack as their parameters */

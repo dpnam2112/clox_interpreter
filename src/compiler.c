@@ -3,6 +3,8 @@
 #include "debug.h"
 #include "scanner.h"
 #include "vm.h"
+#include "value.h"
+#include "object.h"
 #include <stdlib.h>
 #include <math.h>
 
@@ -23,12 +25,12 @@ static void emit_error_msg(Token * tk_error, const char * msg)
 
 	fprintf(stderr, "On line %u", tk_error->line);
 	if (tk_error->type == TK_EOF)
-		fprintf(stderr, ", at end: %s.\n", msg);
+		fprintf(stderr, ", at end: %s\n", msg);
 	else if (tk_error->type != TK_ERROR)
-		fprintf(stderr, ", at token '%.*s': %s.\n", tk_error->length,
+		fprintf(stderr, ", at token '%.*s': %s\n", tk_error->length,
 				tk_error->start, msg); 
 	else
-		fprintf(stderr, ": %.*s.\n", tk_error->length, tk_error->start);
+		fprintf(stderr, ": %.*s\n", tk_error->length, tk_error->start);
 }
 
 static void error(Token * tk_error, const char * msg)
@@ -46,6 +48,11 @@ static void emit_byte(uint8_t byte)
 static void emit_bytes(void * bytes, uint8_t byte_count)
 {
 	chunk_append_bytes(current_chunk(), bytes, byte_count);
+}
+
+static void emit_constant(Value val)
+{
+	chunk_write_load_const(current_chunk(), val, parser.prev.line);
 }
 
 static void advance()
@@ -91,6 +98,8 @@ static void unary();
 static void binary();
 static void grouping();
 static void number();
+static void literal();
+static void string();
 
 typedef void (*ParseFn) ();	// pointer to a parsing function
 
@@ -104,6 +113,9 @@ ParseRule;
 
 /* parse_rules: a mapping from operators to appropiate parsing rules */
 ParseRule parse_rules[] = {
+  [TK_TRUE]	     = {literal, NULL, PREC_PRIMARY},
+  [TK_FALSE]	     = {literal, NULL, PREC_PRIMARY},
+  [TK_NIL]	     = {literal, NULL, PREC_PRIMARY},
   [TK_LEFT_PAREN]    = {grouping, NULL,   PREC_NONE},
   [TK_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
   [TK_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE}, 
@@ -115,31 +127,28 @@ ParseRule parse_rules[] = {
   [TK_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
   [TK_SLASH]         = {NULL,     binary, PREC_FACTOR},
   [TK_STAR]          = {NULL,     binary, PREC_FACTOR},
-  [TK_BANG]          = {NULL,     NULL,   PREC_NONE},
-  [TK_BANG_EQUAL]    = {NULL,     NULL,   PREC_NONE},
+  [TK_BANG]          = {unary, 	  NULL,   PREC_UNARY},
+  [TK_BANG_EQUAL]    = {NULL,     binary,   PREC_EQUALITY},
   [TK_EQUAL]         = {NULL,     NULL,   PREC_NONE},
-  [TK_EQUAL_EQUAL]   = {NULL,     NULL,   PREC_NONE},
-  [TK_GREATER]       = {NULL,     NULL,   PREC_NONE},
-  [TK_GREATER_EQUAL] = {NULL,     NULL,   PREC_NONE},
-  [TK_LESS]          = {NULL,     NULL,   PREC_NONE},
-  [TK_LESS_EQUAL]    = {NULL,     NULL,   PREC_NONE},
+  [TK_EQUAL_EQUAL]   = {NULL,     binary,   PREC_EQUALITY},
+  [TK_GREATER]       = {NULL,     binary,   PREC_COMPARISON},
+  [TK_GREATER_EQUAL] = {NULL,     binary,   PREC_COMPARISON},
+  [TK_LESS]          = {NULL,     binary,   PREC_COMPARISON},
+  [TK_LESS_EQUAL]    = {NULL,     binary,   PREC_COMPARISON},
   [TK_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
-  [TK_STRING]        = {NULL,     NULL,   PREC_NONE},
+  [TK_STRING]        = {string,     NULL,   PREC_PRIMARY},
   [TK_NUMBER]        = {number,   NULL,   PREC_NONE},
-  [TK_AND]           = {NULL,     NULL,   PREC_NONE},
+  [TK_AND]           = {NULL,     binary, PREC_AND},
   [TK_CLASS]         = {NULL,     NULL,   PREC_NONE},
   [TK_ELSE]          = {NULL,     NULL,   PREC_NONE},
-  [TK_FALSE]         = {NULL,     NULL,   PREC_NONE},
   [TK_FOR]           = {NULL,     NULL,   PREC_NONE},
   [TK_FUN]           = {NULL,     NULL,   PREC_NONE},
   [TK_IF]            = {NULL,     NULL,   PREC_NONE},
-  [TK_NIL]           = {NULL,     NULL,   PREC_NONE},
-  [TK_OR]            = {NULL,     NULL,   PREC_NONE},
+  [TK_OR]            = {NULL,     binary, PREC_OR},
   [TK_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TK_RETURN]        = {NULL,     NULL,   PREC_NONE},
   [TK_SUPER]         = {NULL,     NULL,   PREC_NONE},
   [TK_THIS]          = {NULL,     NULL,   PREC_NONE},
-  [TK_TRUE]          = {NULL,     NULL,   PREC_NONE},
   [TK_VAR]           = {NULL,     NULL,   PREC_NONE},
   [TK_WHILE]         = {NULL,     NULL,   PREC_NONE},
   [TK_ERROR]         = {NULL,     NULL,   PREC_NONE},
@@ -191,7 +200,27 @@ static void expression()
 static void number()
 {
 	double literal = strtod(parser.prev.start, NULL);
-	chunk_write_load_const(current_chunk(), literal, parser.prev.line);
+	emit_constant(NUMBER_VAL(literal));
+}
+
+
+static void string()
+{
+	/* Create a string object in heap memory */
+	StringObj * str_obj = 
+		StringObj_construct(parser.prev.start, parser.prev.length);
+	emit_constant(OBJ_VAL(str_obj->obj));
+}
+
+static void literal()
+{
+	switch (parser.prev.type)
+	{
+		case TK_TRUE: emit_byte(OP_TRUE); break;
+		case TK_FALSE: emit_byte(OP_FALSE); break;
+		case TK_NIL: emit_byte(OP_NIL); break;
+		default: return;
+	}
 }
 
 /* unary(): parse the unary expression */
@@ -203,7 +232,11 @@ static void unary()
 	switch (op.type)
 	{
 		case TK_MINUS:
-			chunk_append(current_chunk(), OP_NEGATE, op.line);
+			emit_byte(OP_NEGATE);
+			break;
+		case TK_BANG:
+			emit_byte(OP_NOT);
+			break;
 		default:
 			error(&op, "Invalid operation.");
 	}
@@ -228,11 +261,30 @@ static void binary()
 
 	switch (op.type)
 	{
+		/* We use chunk_append here because there are some cases where the operator and
+		 * its operands do not lie on the same line. If an error occurs, we have to report
+		 * the exact line on which a token is */
+
 		case TK_PLUS: 	chunk_append(current_chunk(), OP_ADD, op.line); break;
 		case TK_MINUS: 	chunk_append(current_chunk(), OP_SUBTRACT, op.line); break;
 		case TK_STAR: 	chunk_append(current_chunk(), OP_MUL, op.line); break;
 		case TK_SLASH: 	chunk_append(current_chunk(), OP_DIV, op.line); break;
-		default:
+		case TK_LESS: 	chunk_append(current_chunk(), OP_LESS, op.line); break;
+		case TK_GREATER: chunk_append(current_chunk(), OP_GREATER, op.line); break;
+		case TK_EQUAL_EQUAL: chunk_append(current_chunk(), OP_EQUAL, op.line); break;
+		case TK_LESS_EQUAL:
+			chunk_append(current_chunk(), OP_GREATER, op.line);
+			chunk_append(current_chunk(), OP_NOT, op.line);
+			break;
+		case TK_GREATER_EQUAL:
+			chunk_append(current_chunk(), OP_LESS, op.line);
+			chunk_append(current_chunk(), OP_NOT, op.line);
+			break;
+		case TK_BANG_EQUAL:
+			chunk_append(current_chunk(), OP_EQUAL, op.line);
+			chunk_append(current_chunk(), OP_NOT, op.line);
+			break;
+		default: ;
 	}
 }
 

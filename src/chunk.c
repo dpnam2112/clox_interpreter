@@ -30,8 +30,8 @@ void chunk_free(Chunk * chunk)
 		FREE_ARRAY(uint8_t, chunk->bytecodes, chunk->capacity);
 	}
 
-	chunk_init(chunk);
 	value_arr_free(&(chunk->constants));
+	chunk_init(chunk);
 }
 
 void chunk_append(Chunk * chunk, uint8_t byte, uint16_t line)

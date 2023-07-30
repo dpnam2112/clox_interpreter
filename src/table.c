@@ -1,0 +1,106 @@
+#include "table.h"
+#include "memory.h"
+#include "value.h"
+#include "object.h"
+#include <math.h>
+
+void table_init(Table * table)
+{
+	table->count = 0;
+	table->capacity = 0;
+	table->entries = NULL;
+}
+
+void table_free(Table * table)
+{
+	FREE_ARRAY(Entry, table->entries, table->capacity);
+	table_init(table);
+}
+
+/* find_entry: Find an empty entry or the entry contains the given key.
+ *
+ * return value: reference to the entry that either is empty or contains
+ * the given key @key
+ * @capacity: number of slots in @entries */
+static Entry * find_entry(Entry * entries, uint32_t capacity, StringObj * key)
+{
+	Entry * tombstone = NULL;
+	uint32_t start = key->hashcode;
+	uint32_t index = 0;
+	for (uint32_t i = 0; i < capacity; i++)
+	{
+		index = (start + i) % capacity;
+		if (entries[index].key == NULL)
+		{
+			if (!entries[index].deleted)
+				return (tombstone != NULL) ? tombstone : &entries[index];
+			else if (tombstone == NULL)
+				tombstone = &entries[index];
+		}
+		else if (entries[index].key == key)
+			return &entries[index];
+	}
+
+	return &entries[index];
+}
+
+static void table_expand(Table * table)
+{
+	uint32_t new_capacity = GROW_CAPACITY(table->capacity);
+	Entry * expanded_entries = ALLOCATE(Entry, new_capacity);
+
+	// Move all non-empty entries from the old table to the new one
+	for (uint32_t i = 0; i < table->capacity; i++)
+	{
+		if (table->entries[i].key == NULL) continue;
+		// Find an empty slot in the expanded table
+		Entry * empty_slot = find_entry(expanded_entries, new_capacity,
+						table->entries[i].key);
+		empty_slot->key = table->entries[i].key;
+		empty_slot->value = table->entries[i].value;
+	}
+
+	FREE_ARRAY(Entry, table->entries, table->capacity);
+	table->entries = expanded_entries;
+	table->capacity = new_capacity;
+}
+
+bool table_set(Table * table, StringObj * key, Value val)
+{
+	/* Ensure that the load factor does not exceed MAX_LOAD */
+	if (table->count + 1 > MAX_LOAD * table->capacity)
+		table_expand(table);
+	Entry * entry = find_entry(table->entries, table->capacity, key);
+	bool new_entry = (entry->key == NULL);
+	if (new_entry) table->count++;
+	entry->key = key;
+	entry->value = val;
+	entry->deleted = false;
+	return new_entry;
+}
+
+bool table_get(Table * table, StringObj * key, Value * dest)
+{
+	if (table->capacity == 0)
+		return false;
+	Entry * target = find_entry(table->entries, table->capacity, key);
+	if (target->key == NULL)
+		return false;
+	if (dest != NULL)
+		*dest = target->value;
+	return true;
+}
+
+bool table_delete(Table * table, StringObj * key, Value * dest)
+{
+	if (table->capacity == 0)
+		return false;
+	Entry * target = find_entry(table->entries, table->capacity, key);
+	if (target->key == NULL) 
+		return false;
+	if (dest != NULL)
+		*dest = target->value;
+	target->deleted = true;
+	target->key = NULL;
+	return true;
+}

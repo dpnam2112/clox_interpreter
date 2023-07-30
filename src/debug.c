@@ -98,6 +98,24 @@ int disassemble_inst(Chunk *chunk, int offset)
 			return simple_instruction("OP_MUL", offset);
 		case OP_DIV:
 			return simple_instruction("OP_DIV", offset);
+		case OP_TRUE:
+			return simple_instruction("OP_TRUE", offset);
+		case OP_FALSE:
+			return simple_instruction("OP_FALSE", offset);
+		case OP_NIL:
+			return simple_instruction("OP_NIL", offset);
+		case OP_NOT:
+			return simple_instruction("OP_NOT", offset);
+		case OP_AND:
+			return simple_instruction("OP_AND", offset);
+		case OP_OR:
+			return simple_instruction("OP_OR", offset);
+		case OP_EQUAL:
+			return simple_instruction("OP_EQUAL", offset);
+		case OP_LESS:
+			return simple_instruction("OP_LESS", offset);
+		case OP_GREATER:
+			return simple_instruction("OP_GREATER", offset);
 		case META_LINE_NUM:
 			return line_number(chunk, offset);
 		default:

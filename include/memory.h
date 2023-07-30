@@ -15,6 +15,9 @@
 
 #define BIT_WIDTH(type) sizeof(type) * 8
 
+#define ALLOCATE(type, size) (type *) reallocate(NULL, 0, sizeof(type) * size)
+#define FREE(type, ptr) (type *) reallocate(ptr, sizeof(type), 0)
+
 /* reallocate: Allocate a new array and move data from the old array
  * to the new one.
  * return value: pointer to the new array
@@ -24,5 +27,6 @@
  * old_sz = any, new_sz = 0: free that array
  * */
 void * reallocate(void * arr, size_t old_sz, size_t new_sz);
+void free_objects();
 
 #endif

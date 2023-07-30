@@ -1,5 +1,27 @@
 #include "value.h"
+#include "object.h"
 #include "memory.h"
+
+bool value_equal(Value val_1, Value val_2)
+{
+	if (val_1.type != val_2.type)
+		return false;
+
+	switch (val_1.type)
+	{
+		case VAL_NIL: return true;
+		case VAL_BOOL: return AS_BOOL(val_1) == AS_BOOL(val_2);
+		case VAL_NUMBER: return AS_NUMBER(val_1) == AS_NUMBER(val_2);
+		case VAL_OBJ:
+			{
+				StringObj * str_1 = AS_STRING(val_1);
+				StringObj * str_2 = AS_STRING(val_2);
+				return str_1->length == str_2->length &&
+					strcmp(str_1->chars, str_2->chars) == 0;
+			}
+		default: return false;
+	}
+}
 
 void value_arr_init(ValueArr * vl_arr)
 {
@@ -28,5 +50,21 @@ void value_arr_append(ValueArr * vl_arr, Value val)
 
 void print_value(Value val)
 {
-	printf("%g", val);
+	switch (val.type)
+	{
+		case VAL_BOOL:	printf((AS_BOOL(val)) ? "true" : "false"); break;
+		case VAL_NIL: 	printf("nil"); break;
+		case VAL_OBJ:	print_object(val); break;
+		default: 	printf("%g", AS_NUMBER(val));
+	}
+}
+
+void print_object(Value val)
+{
+	switch (OBJ_TYPE(val))
+	{
+		case OBJ_STRING:
+			printf ("%s", AS_CSTRING(val));
+			break;
+	}
 }

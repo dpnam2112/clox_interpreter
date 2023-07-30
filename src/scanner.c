@@ -140,7 +140,7 @@ static Token string()
 	if (is_at_end() || peek() == '\n')
 		return token_error("Unterminated string.");
 	Token tk_string = make_token(TK_STRING);
-	advance();
+	advance(); // consume the ending '"'
 	return tk_string;
 }
 

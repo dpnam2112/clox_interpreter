@@ -7,10 +7,12 @@ TEST_BIN := $(BIN)/test
 TEST_SRC := ./test
 TEST_EXEC := $(TEST_BIN)/test
 COMMON_FLAGS := -Wall -I $(INCLUDE) -g
-OBJ_FILES := value.o debug.o chunk.o memory.o vm.o scanner.o compiler.o
+OBJ_FILES := value.o debug.o chunk.o memory.o vm.o scanner.o compiler.o object.o table.o
 MAIN_OBJS := $(OBJ_FILES) main.o
 OBJ_FILE_PATHS := $(addprefix $(OBJ_DIR)/, $(OBJ_FILES))
 EXECUTABLE := $(BIN)/all
+
+#Dependencies of each object file
 
 memory_dp := common.h memory.h memory.c
 chunk_dp := common.h memory.h chunk.h value.h chunk.c
@@ -20,6 +22,8 @@ value_dp := memory.h common.h value.h value.c
 vm_dp := memory.h common.h debug.h value.h vm.h vm.c
 compiler_dp := compiler.h scanner.h compiler.c
 scanner_dp := common.h scanner.h scanner.c
+object_dp := common.h value.h object.h object.c
+table_dp := common.h table.h table.c
 
 run:
 	$(EXECUTABLE)
@@ -56,6 +60,12 @@ scanner.o: $(addprefix $(SRC)/, $(filter %.c, $(scanner_dp))) $(addprefix $(INCL
 
 compiler.o: $(addprefix $(SRC)/, $(filter %.c, $(compiler_dp))) $(addprefix $(INCLUDE)/, $(filter %.h, $(compiler_dp)))
 	$(CC) -c $(COMMON_FLAGS) $(addprefix $(SRC)/, $(filter %.c, $(compiler_dp))) -o $(OBJ_DIR)/compiler.o 
+
+object.o: $(addprefix $(SRC)/, $(filter %.c, $(object_dp))) $(addprefix $(INCLUDE)/, $(filter %.h, $(object_dp)))
+	$(CC) -c $(COMMON_FLAGS) $(addprefix $(SRC)/, $(filter %.c, $(object_dp))) -o $(OBJ_DIR)/object.o 
+
+table.o: $(addprefix $(SRC)/, $(filter %.c, $(table_dp))) $(addprefix $(INCLUDE)/, $(filter %.h, $(table_dp)))
+	$(CC) -c $(COMMON_FLAGS) $(addprefix $(SRC)/, $(filter %.c, $(table_dp))) -o $(OBJ_DIR)/table.o 
 
 test:
 
