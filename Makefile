@@ -17,54 +17,64 @@ EXECUTABLE := $(BIN)/all
 memory_dp := common.h memory.h memory.c
 chunk_dp := common.h memory.h chunk.h value.h chunk.c
 debug_dp := common.h chunk.h debug.h debug.c
-main_dp := common.h chunk.h debug.h main.c
+main_dp := common.h chunk.h debug.h vm.h main.c
 value_dp := memory.h common.h value.h value.c
 vm_dp := memory.h common.h debug.h value.h vm.h vm.c
-compiler_dp := compiler.h scanner.h compiler.c
+compiler_dp := compiler.h scanner.h vm.h value.h object.h debug.h compiler.c
 scanner_dp := common.h scanner.h scanner.c
-object_dp := common.h value.h object.h object.c
-table_dp := common.h table.h table.c
+object_dp := common.h value.h object.h table.h object.c
+table_dp := common.h table.h memory.h value.h object.h table.c
 
-run:
+run: all
 	$(EXECUTABLE)
 
 run_test:
 	$(TEST_EXEC)
 
-main:  $(MAIN_OBJS)
+all:  $(addprefix $(OBJ_DIR)/, $(MAIN_OBJS))
 	$(CC) $(COMMON_FLAGS) $(addprefix $(OBJ_DIR)/, $(MAIN_OBJS)) -I $(TEST_SRC) -o $(EXECUTABLE)
 
 test:	$(OBJ_FILES) $(TEST_SRC)/*
 	$(CC) $(COMMON_FLAGS) $(addprefix $(OBJ_DIR)/, $(OBJ_FILES)) $(TEST_SRC)/*.c -o $(TEST_EXEC)
 
-main.o: $(addprefix $(SRC)/, $(filter %.c, $(memory_dp))) $(addprefix $(INCLUDE)/, $(filter %.h, $(memory_dp)))
-	$(CC) -c $(COMMON_FLAGS) $(addprefix $(SRC)/, $(filter %.c, $(main_dp))) -o $(OBJ_DIR)/main.o 
+$(OBJ_DIR)/main.o: $(addprefix $(SRC)/, $(filter %.c, $(memory_dp))) \
+		$(addprefix $(INCLUDE)/, $(filter %.h, $(memory_dp)))
+	$(CC) -c $(COMMON_FLAGS) $(addprefix $(SRC)/, $(filter %.c, $(main_dp))) -o $(OBJ_DIR)/main.o
 
-chunk.o: $(addprefix $(SRC)/, $(filter %.c, $(chunk_dp))) $(addprefix $(INCLUDE)/, $(filter %.h, $(chunk_dp)))
+$(OBJ_DIR)/chunk.o: $(addprefix $(SRC)/, $(filter %.c, $(chunk_dp))) \
+	$(addprefix $(INCLUDE)/, $(filter %.h, $(chunk_dp)))
 	$(CC) -c $(COMMON_FLAGS) $(addprefix $(SRC)/, $(filter %.c, $(chunk_dp))) -o $(OBJ_DIR)/chunk.o 
 
-debug.o: $(addprefix $(SRC)/, $(filter %.c, $(debug_dp))) $(addprefix $(INCLUDE)/, $(filter %.h, $(debug_dp)))
+$(OBJ_DIR)/debug.o: $(addprefix $(SRC)/, $(filter %.c, $(debug_dp))) \
+	$(addprefix $(INCLUDE)/, $(filter %.h, $(debug_dp)))
 	$(CC) -c $(COMMON_FLAGS) $(addprefix $(SRC)/, $(filter %.c, $(debug_dp))) -o $(OBJ_DIR)/debug.o 
 
-value.o: $(addprefix $(SRC)/, $(filter %.c, $(value_dp))) $(addprefix $(INCLUDE)/, $(filter %.h, $(value_dp)))
+$(OBJ_DIR)/value.o: $(addprefix $(SRC)/, $(filter %.c, $(value_dp))) \
+	$(addprefix $(INCLUDE)/, $(filter %.h, $(value_dp)))
 	$(CC) -c $(COMMON_FLAGS) $(addprefix $(SRC)/, $(filter %.c, $(value_dp))) -o $(OBJ_DIR)/value.o 
 
-memory.o: $(addprefix $(SRC)/, $(filter %.c, $(memory_dp))) $(addprefix $(INCLUDE)/, $(filter %.h, $(memory_dp)))
+$(OBJ_DIR)/memory.o: $(addprefix $(SRC)/, $(filter %.c, $(memory_dp))) \
+	$(addprefix $(INCLUDE)/, $(filter %.h, $(memory_dp)))
 	$(CC) -c $(COMMON_FLAGS) $(addprefix $(SRC)/, $(filter %.c, $(memory_dp))) -o $(OBJ_DIR)/memory.o 
 
-vm.o: $(addprefix $(SRC)/, $(filter %.c, $(vm_dp))) $(addprefix $(INCLUDE)/, $(filter %.h, $(vm_dp)))
+$(OBJ_DIR)/vm.o: $(addprefix $(SRC)/, $(filter %.c, $(vm_dp))) \
+	$(addprefix $(INCLUDE)/, $(filter %.h, $(vm_dp)))
 	$(CC) -c $(COMMON_FLAGS) $(addprefix $(SRC)/, $(filter %.c, $(vm_dp))) -o $(OBJ_DIR)/vm.o 
 
-scanner.o: $(addprefix $(SRC)/, $(filter %.c, $(scanner_dp))) $(addprefix $(INCLUDE)/, $(filter %.h, $(scanner_dp)))
+$(OBJ_DIR)/scanner.o: $(addprefix $(SRC)/, $(filter %.c, $(scanner_dp))) \
+	$(addprefix $(INCLUDE)/, $(filter %.h, $(scanner_dp)))
 	$(CC) -c $(COMMON_FLAGS) $(addprefix $(SRC)/, $(filter %.c, $(scanner_dp))) -o $(OBJ_DIR)/scanner.o 
 
-compiler.o: $(addprefix $(SRC)/, $(filter %.c, $(compiler_dp))) $(addprefix $(INCLUDE)/, $(filter %.h, $(compiler_dp)))
+$(OBJ_DIR)/compiler.o: $(addprefix $(SRC)/, $(filter %.c, $(compiler_dp))) \
+	$(addprefix $(INCLUDE)/, $(filter %.h, $(compiler_dp)))
 	$(CC) -c $(COMMON_FLAGS) $(addprefix $(SRC)/, $(filter %.c, $(compiler_dp))) -o $(OBJ_DIR)/compiler.o 
 
-object.o: $(addprefix $(SRC)/, $(filter %.c, $(object_dp))) $(addprefix $(INCLUDE)/, $(filter %.h, $(object_dp)))
+$(OBJ_DIR)/object.o: $(addprefix $(SRC)/, $(filter %.c, $(object_dp))) \
+	$(addprefix $(INCLUDE)/, $(filter %.h, $(object_dp)))
 	$(CC) -c $(COMMON_FLAGS) $(addprefix $(SRC)/, $(filter %.c, $(object_dp))) -o $(OBJ_DIR)/object.o 
 
-table.o: $(addprefix $(SRC)/, $(filter %.c, $(table_dp))) $(addprefix $(INCLUDE)/, $(filter %.h, $(table_dp)))
+$(OBJ_DIR)/table.o: $(addprefix $(SRC)/, $(filter %.c, $(table_dp))) \
+	$(addprefix $(INCLUDE)/, $(filter %.h, $(table_dp)))
 	$(CC) -c $(COMMON_FLAGS) $(addprefix $(SRC)/, $(filter %.c, $(table_dp))) -o $(OBJ_DIR)/table.o 
 
 test:
