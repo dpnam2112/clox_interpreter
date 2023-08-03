@@ -17,6 +17,8 @@ typedef struct
 	Value * stack_top;
 	Obj * objects;
 	Table strings;	// used for string-interning technique
+	Table globals; 	// global variables
+	bool repl;
 } VM;
 
 typedef enum
@@ -28,7 +30,7 @@ typedef enum
 
 extern VM vm;
 
-void vm_init();
+void vm_init(bool is_repl);
 void vm_free();
 InterpretResult vm_interpret(Chunk * chunk);
 void vm_stack_push(Value value);

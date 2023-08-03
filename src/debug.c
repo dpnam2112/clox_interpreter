@@ -118,6 +118,18 @@ int disassemble_inst(Chunk *chunk, int offset)
 			return simple_instruction("OP_GREATER", offset);
 		case META_LINE_NUM:
 			return line_number(chunk, offset);
+		case OP_PRINT:
+			return simple_instruction("OP_PRINT", offset);
+		case OP_POP:
+			return simple_instruction("OP_POP", offset);
+		case OP_DEFINE_GLOBAL:
+			return const_long_instruction("OP_DEFINE_GLOBAL", chunk, offset);
+		case OP_GET_GLOBAL:
+			return const_long_instruction("OP_GET_GLOBAL", chunk, offset);
+		case OP_SET_GLOBAL:
+			return const_long_instruction("OP_SET_GLOBAL", chunk, offset);
+		case OP_EXIT:
+			return simple_instruction("OP_EXIT", offset);
 		default:
 			printf("Unknown opcode\n");
 			return offset + 1;

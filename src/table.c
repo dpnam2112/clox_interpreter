@@ -25,23 +25,21 @@ void table_free(Table * table)
 static Entry * find_entry(Entry * entries, uint32_t capacity, StringObj * key)
 {
 	Entry * tombstone = NULL;
-	uint32_t start = key->hashcode;
-	uint32_t index = 0;
-	for (uint32_t i = 0; i < capacity; i++)
+	uint32_t i;
+	for (i = key->hashcode % capacity; true; i = (i + 1) % capacity)
 	{
-		index = (start + i) % capacity;
-		if (entries[index].key == NULL)
+		if (entries[i].key == NULL)
 		{
-			if (!entries[index].deleted)
-				return (tombstone != NULL) ? tombstone : &entries[index];
+			if (!entries[i].deleted)
+				return (tombstone != NULL) ? tombstone : &entries[i];
 			else if (tombstone == NULL)
-				tombstone = &entries[index];
+				tombstone = &entries[i];
 		}
-		else if (entries[index].key == key)
-			return &entries[index];
+		else if (entries[i].key == key)
+			return &entries[i];
 	}
 
-	return &entries[index];
+	return &entries[i];
 }
 
 static void table_expand(Table * table)
@@ -75,7 +73,6 @@ bool table_set(Table * table, StringObj * key, Value val)
 	if (new_entry) table->count++;
 	entry->key = key;
 	entry->value = val;
-	entry->deleted = false;
 	return new_entry;
 }
 
@@ -86,8 +83,7 @@ bool table_get(Table * table, StringObj * key, Value * dest)
 	Entry * target = find_entry(table->entries, table->capacity, key);
 	if (target->key == NULL)
 		return false;
-	if (dest != NULL)
-		*dest = target->value;
+	*dest = target->value;
 	return true;
 }
 
@@ -102,5 +98,6 @@ bool table_delete(Table * table, StringObj * key, Value * dest)
 		*dest = target->value;
 	target->deleted = true;
 	target->key = NULL;
+	table->count--;
 	return true;
 }

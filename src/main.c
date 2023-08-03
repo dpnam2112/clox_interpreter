@@ -19,7 +19,7 @@ InterpretResult interpret(const char *);
 
 int main(int argc, char ** argv)
 {
-	vm_init();
+	vm_init(argc == 1);
 
 	if (argc == 1)
 	{

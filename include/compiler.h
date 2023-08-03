@@ -5,15 +5,6 @@
 #include "scanner.h"
 #include "chunk.h"
 
-typedef struct Parser
-{
-	Token prev;
-	Token current;
-	bool error;	// was there any error occured?
-	bool panic;	// should the parser enter panic mode?
-}
-Parser;
-
 typedef enum
 {
 	// Precedence is declared in order, from the lowest precedence
@@ -32,6 +23,18 @@ typedef enum
 }
 Precedence;
 
+typedef struct Parser
+{
+	Token prev;
+	Token current;
+	bool error;	// was there any error occured?
+	bool panic;	// should the parser enter panic mode?
+	Precedence prev_prec;
+}
+Parser;
+
+
+void parser_init();
 bool compile(const char * source, Chunk * chunk);
 
 #endif

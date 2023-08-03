@@ -11,6 +11,12 @@
 Parser parser;
 Chunk * compiling_chunk;
 
+void parser_init()
+{
+	parser.error = false;
+	parser.panic = false;
+	parser.prev_prec = PREC_NONE;
+}
 
 static Chunk * current_chunk()
 {
@@ -50,9 +56,22 @@ static void emit_bytes(void * bytes, uint8_t byte_count)
 	chunk_append_bytes(current_chunk(), bytes, byte_count);
 }
 
-static void emit_constant(Value val)
+/* emit_param_inst: write instruction that has one parameter (OP_CONST, OP_CONST_LONG...) */
+static void emit_param_inst(Opcode opcode, uint32_t param, uint8_t param_sz)
+{
+	emit_byte(opcode);
+	emit_bytes(&param, param_sz);
+}
+
+static void emit_const_inst(Value val)
 {
 	chunk_write_load_const(current_chunk(), val, parser.prev.line);
+}
+
+static uint32_t identifier_constant(Token * tk)
+{
+	StringObj * identifier = StringObj_construct(tk->start, tk->length);
+	return chunk_add_const(current_chunk(), OBJ_VAL(*identifier));
 }
 
 static void advance()
@@ -65,6 +84,50 @@ static void advance()
 			break;
 		error(&parser.current, parser.current.start);
 	}
+}
+
+static bool check(TokenType type)
+{
+	return parser.current.type == type;
+}
+
+static void synchronize()
+{
+	parser.panic = false;
+	while (parser.current.type != TK_EOF)
+	{
+		if (parser.prev.type == TK_SEMICOLON)
+			break;
+
+		switch (parser.current.type)
+		{
+			case TK_VAR:
+			case TK_PRINT:
+			case TK_CLASS:
+			case TK_FUN:
+			case TK_WHILE:
+			case TK_FOR:
+			case TK_IF:
+			case TK_RETURN:
+				break;
+			default:
+		}
+
+		advance();
+	}
+
+	parser.panic = false;
+}
+
+static bool match(TokenType type)
+{
+	if (parser.current.type == type)
+	{
+		advance();
+		return true;
+	}
+
+	return false;
 }
 
 /* consume: consume the current token if its type is @type
@@ -91,7 +154,7 @@ static void emit_return()
 
 static void end_compiler()
 {
-	emit_return();
+	emit_byte(OP_EXIT);
 }
 
 static void unary();
@@ -100,6 +163,12 @@ static void grouping();
 static void number();
 static void literal();
 static void string();
+static void variable();
+static void assignment();
+static void stmt();
+static void var_declaration();
+static uint32_t parse_identifier(const char * error_msg);
+static void define_variable(uint32_t offset);
 
 typedef void (*ParseFn) ();	// pointer to a parsing function
 
@@ -129,15 +198,15 @@ ParseRule parse_rules[] = {
   [TK_STAR]          = {NULL,     binary, PREC_FACTOR},
   [TK_BANG]          = {unary, 	  NULL,   PREC_UNARY},
   [TK_BANG_EQUAL]    = {NULL,     binary,   PREC_EQUALITY},
-  [TK_EQUAL]         = {NULL,     NULL,   PREC_NONE},
+  [TK_EQUAL]         = {NULL,     assignment,   PREC_ASSIGNMENT},
   [TK_EQUAL_EQUAL]   = {NULL,     binary,   PREC_EQUALITY},
   [TK_GREATER]       = {NULL,     binary,   PREC_COMPARISON},
   [TK_GREATER_EQUAL] = {NULL,     binary,   PREC_COMPARISON},
   [TK_LESS]          = {NULL,     binary,   PREC_COMPARISON},
   [TK_LESS_EQUAL]    = {NULL,     binary,   PREC_COMPARISON},
-  [TK_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
+  [TK_IDENTIFIER]    = {variable,     NULL,   PREC_NONE},
   [TK_STRING]        = {string,     NULL,   PREC_PRIMARY},
-  [TK_NUMBER]        = {number,   NULL,   PREC_NONE},
+  [TK_NUMBER]        = {number,   NULL,   PREC_PRIMARY},
   [TK_AND]           = {NULL,     binary, PREC_AND},
   [TK_CLASS]         = {NULL,     NULL,   PREC_NONE},
   [TK_ELSE]          = {NULL,     NULL,   PREC_NONE},
@@ -160,7 +229,6 @@ static ParseRule * get_rule(TokenType op)
 	return &(parse_rules[op]);
 }
 
-
 /* parse_precedence: parse the expression whose precedence is
  * not lower than @prec
  * @prec: precedence's lower bound
@@ -180,7 +248,9 @@ static void parse_precedence(Precedence prec)
 	}
 
 	prefix_rule();	// call the appropriate function to parse the prefix expression or literal
-	while (get_rule(parser.current.type)->prec >= prec)
+	parser.prev_prec = get_rule(parser.prev.type)->prec;
+
+	while (get_rule(parser.current.type)->prec >= prec && !parser.panic)
 	{
 		advance();	// consume the infix operator
 		// find the appropriate function to parse the second operand
@@ -192,7 +262,110 @@ static void parse_precedence(Precedence prec)
 
 static void expression()
 {
+	parser.prev_prec = PREC_NONE;
 	parse_precedence(PREC_ASSIGNMENT);
+}
+
+static void assignment()
+{
+	if (parser.prev_prec >= PREC_ASSIGNMENT)
+	{
+		error(&parser.prev, "Invalid assignment.");
+		return;
+	}
+
+	// since the previous identifier is added recently, it lies on top
+	// of the constant pool
+	uint32_t iden_offset = current_chunk()->constants.size - 1;
+	parse_precedence(PREC_ASSIGNMENT);
+	emit_param_inst(OP_SET_GLOBAL, iden_offset, 3);
+}
+
+static void variable()
+{
+	uint32_t offset = identifier_constant(&parser.prev);
+	// build bytecodes, format: <opcode> <three-byte offset>
+	
+	// if the next operation is assignment, no need to load the variable
+	// to the stack
+	if (parser.current.type != TK_EQUAL)
+		emit_param_inst(OP_GET_GLOBAL, offset, 3);
+}
+
+
+static void declaration()
+{
+	if (match(TK_VAR))
+		var_declaration();
+	else
+		stmt();
+
+	if (parser.panic)
+		synchronize();
+}
+
+/* var_declaration(): parse the var declaration statement
+ * Bytecode form:<EXPRESSION> OP_DEFINE <OFFSET>, where
+ *
+ * <EXPRESSION>: bytecode form of the right-hand side expression
+ * <OFFSET>: offset of the string object representing the identifier,
+ * takes up three bytes
+ * */
+static void var_declaration()
+{
+	// parse the identifier and construct a string object (StringObj)
+	// representing the identifier. The object is put in the constant pool.
+	// offset -> offset of the object in the constant pool
+	uint32_t offset = parse_identifier("Expect an identifier.");
+
+	if (match(TK_EQUAL))
+		expression();
+	else
+		emit_byte(OP_NIL);
+	consume(TK_SEMICOLON, "Expect ';' after statement.");
+	define_variable(offset);
+}
+
+static void define_variable(uint32_t offset)
+{
+	emit_param_inst(OP_DEFINE_GLOBAL, offset, 3);
+}
+
+/* parse_identifier: parse the identifier. If the current token is
+ * not an identifier, emit an error message to stderr. Also, add a
+ * string object representing the identifier to the constant pool.
+ *
+ * return value: offset of the identifier in the constant pool */
+static uint32_t parse_identifier(const char * error_msg)
+{
+	consume(TK_IDENTIFIER, error_msg);
+	Value identifier = OBJ_VAL(
+			*StringObj_construct(parser.prev.start, parser.prev.length)
+			);
+	return chunk_add_const(current_chunk(), identifier);
+}
+
+static void print_stmt()
+{
+	expression();
+	consume(TK_SEMICOLON, "Expect a ';' after statement.");
+	emit_byte(OP_PRINT);
+}
+
+static void expression_stmt()
+{
+	expression();
+	consume(TK_SEMICOLON, "Expect a ';' after statement.");
+	emit_byte(vm.repl ? OP_PRINT : OP_POP);
+}
+
+// parse statements that are not declaration type
+static void stmt()
+{
+	if (match(TK_PRINT))
+		print_stmt();
+	else
+		expression_stmt();
 }
 
 /* number: take the consumed token (@parser.prev) and 'transform' it into
@@ -200,16 +373,15 @@ static void expression()
 static void number()
 {
 	double literal = strtod(parser.prev.start, NULL);
-	emit_constant(NUMBER_VAL(literal));
+	emit_const_inst(NUMBER_VAL(literal));
 }
-
 
 static void string()
 {
 	/* Create a string object in heap memory */
 	StringObj * str_obj = 
 		StringObj_construct(parser.prev.start, parser.prev.length);
-	emit_constant(OBJ_VAL(str_obj->obj));
+	emit_const_inst(OBJ_VAL(str_obj->obj));
 }
 
 static void literal()
@@ -286,6 +458,8 @@ static void binary()
 			break;
 		default: ;
 	}
+
+	parser.prev_prec = op_prec;
 }
 
 /* compile: parse the source and emit bytecodes.
@@ -293,19 +467,18 @@ static void binary()
 bool compile(const char * source, Chunk * chunk)
 {
 	scanner_init(source);
+	parser_init();
 	compiling_chunk = chunk;
 	
  	// tell the parser to look at the very first token, but not consume it yet
 	advance();
 
-	expression();
+	while (!match(TK_EOF))
+		declaration();
 #ifdef BYTECODE_LOG
 	disassemble_chunk(current_chunk(), "Disassemble bytecodes");
 #endif
-	emit_return();
-
 	scanner_free();
 	end_compiler();
 	return !parser.error;
 }
-

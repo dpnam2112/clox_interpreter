@@ -4,6 +4,7 @@
 #include "value.h"
 #include "compiler.h"
 #include "object.h"
+#include "table.h"
 #include <stdarg.h>
 
 VM vm;
@@ -13,15 +14,18 @@ static void stack_reset()
 	vm.stack_top = vm.stack;
 }
 
-void vm_init()
+void vm_init(bool repl)
 {
 	stack_reset();
 	table_init(&vm.strings);
+	table_init(&vm.globals);
+	vm.repl = repl;
 }
 
 void vm_free()
 {
 	table_free(&vm.strings);
+	table_free(&vm.globals);
 	free_objects();
 	stack_reset();
 }
@@ -86,14 +90,28 @@ static void runtime_error(const char * format, ...)
 	stack_reset();
 }
 
+/* read n bytes from @vm.bytecodes, starting from @start.
+ * @byte_count: number of bytes which represents the offset
+ *
+ * @byte_count does not exceed 4. If it does, it will be changed to 4.
+ * return value: positive integer value */
+static uint32_t read_bytes(uint8_t byte_count)
+{
+	if (byte_count > 4) byte_count = 4;
+	uint32_t bytes;
+	memcpy(&bytes, vm.pc, byte_count);
+	vm.pc += byte_count;
+	return bytes;
+}
+
 static InterpretResult run()
 {
 #define READ_BYTE() *(vm.pc++)
-#define READ_CONST() vm.chunk->constants.values[READ_BYTE()];
+#define READ_CONST() vm.chunk->constants.values[READ_BYTE()]
 #define READ_BYTES(dest, n)\
 	memcpy(dest, vm.pc, n);\
 	vm.pc += n
-#define READ_CONST_AT(offset) vm.chunk->constants.values[offset];
+#define READ_CONST_AT(offset) vm.chunk->constants.values[offset]
 #define BINARY_OP(value_type, op)\
 do {\
 	if (!(IS_NUMBER(vm_stack_peek(0)) && IS_NUMBER(vm_stack_peek(1)))) \
@@ -121,11 +139,13 @@ do {\
 		uint8_t inst;
 		switch (inst = READ_BYTE())
 		{
+		case OP_EXIT:
+			return INTERPRET_OK;
 		case OP_RETURN:
 			{
 				print_value(vm_stack_pop());
 				printf("\n");
-				return INTERPRET_OK;
+				break;
 			}
 		case OP_CONST:
 			{
@@ -229,6 +249,52 @@ do {\
 		case META_LINE_NUM:
 			vm.pc += 2;
 			break;
+		case OP_PRINT:
+			{
+				Value value = vm_stack_pop();
+				print_value(value);
+				printf("\n");
+				break;
+			}
+		case OP_POP:
+			{
+				vm_stack_pop();
+				break;
+			}
+		case OP_DEFINE_GLOBAL:
+			{
+				uint32_t iden_offset = read_bytes(3);
+				StringObj * identifier = AS_OBJ(READ_CONST_AT(iden_offset));
+				table_set(&vm.globals, identifier, vm_stack_peek(0));
+				vm_stack_pop();
+				break;
+			}
+		case OP_GET_GLOBAL:
+			{
+				uint32_t offset = read_bytes(3);
+				StringObj * identifier = AS_OBJ(READ_CONST_AT(offset));
+				Value value;
+				if (!table_get(&vm.globals, identifier, &value))
+				{
+					runtime_error("Undefined identifier: '%s'.", identifier->chars);
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				else
+					vm_stack_push(value);
+				break;
+			}
+		case OP_SET_GLOBAL:
+			{
+				uint32_t offset = read_bytes(3);
+				StringObj * identifier = AS_OBJ(READ_CONST_AT(offset));
+				if (table_set(&vm.globals, identifier, vm_stack_peek(0)))
+				{
+					runtime_error("Undefined identifier: '%s'.", identifier->chars);
+					table_delete(&vm.globals, identifier, NULL);
+					return INTERPRET_RUNTIME_ERROR;
+				}
+				break;
+			}
 		}
 	}
 
