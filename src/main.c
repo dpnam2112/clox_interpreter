@@ -38,7 +38,6 @@ int main(int argc, char ** argv)
 	}
 
 	vm_free();
-	printf("end repl\n");
 }
 
 static void repl()

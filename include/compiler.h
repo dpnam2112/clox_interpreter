@@ -27,6 +27,7 @@ typedef struct Parser
 {
 	Token prev;
 	Token current;
+	Token consumed_identifier;	// identifier that is consumed recently
 	bool error;	// was there any error occured?
 	bool panic;	// should the parser enter panic mode?
 	Precedence prev_prec;

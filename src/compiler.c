@@ -8,8 +8,36 @@
 #include <stdlib.h>
 #include <math.h>
 
+typedef struct Local
+{
+	Token name;
+	int depth;
+}
+Local;
+
+typedef struct Compiler
+{
+	Local * locals[UINT8_MAX];
+	Table const_global;
+	int local_count;
+	int scope_depth;
+}
+Compiler;
+
 Parser parser;
 Chunk * compiling_chunk;
+Compiler * current = NULL;
+
+static void compiler_init(Compiler * compiler)
+{
+	compiler->scope_depth = compiler->local_count = 0;
+	current = compiler;
+}
+
+static void compiler_free()
+{
+	current = NULL;
+}
 
 void parser_init()
 {
@@ -56,13 +84,17 @@ static void emit_bytes(void * bytes, uint8_t byte_count)
 	chunk_append_bytes(current_chunk(), bytes, byte_count);
 }
 
-/* emit_param_inst: write instruction that has one parameter (OP_CONST, OP_CONST_LONG...) */
+/** @emit_param_inst: write instruction that has one parameter 
+ * (OP_CONST, OP_CONST_LONG...) */
 static void emit_param_inst(Opcode opcode, uint32_t param, uint8_t param_sz)
 {
 	emit_byte(opcode);
 	emit_bytes(&param, param_sz);
 }
 
+/** @emit_const_inst: write a load instruction that load @val
+ * to the virtual machine.
+ */
 static void emit_const_inst(Value val)
 {
 	chunk_write_load_const(current_chunk(), val, parser.prev.line);
@@ -166,8 +198,10 @@ static void string();
 static void variable();
 static void assignment();
 static void stmt();
+static void block_stmt();
 static void var_declaration();
 static uint32_t parse_identifier(const char * error_msg);
+static void declare_variable();
 static void define_variable(uint32_t offset);
 
 typedef void (*ParseFn) ();	// pointer to a parsing function
@@ -229,6 +263,13 @@ static ParseRule * get_rule(TokenType op)
 	return &(parse_rules[op]);
 }
 
+static bool identifier_equal(Token * tk_1, Token * tk_2) 
+{
+	return tk_1->length == tk_2->length &&
+		memcmp(tk_1->start, tk_2->start, tk_1->length) == 0;
+}
+
+
 /* parse_precedence: parse the expression whose precedence is
  * not lower than @prec
  * @prec: precedence's lower bound
@@ -243,7 +284,7 @@ static void parse_precedence(Precedence prec)
 
 	if (prefix_rule == NULL)
 	{
-		error(&parser.prev, "Expect an expression");
+		error(&parser.prev, "Expect an expression.");
 		return;
 	}
 
@@ -252,6 +293,12 @@ static void parse_precedence(Precedence prec)
 
 	while (get_rule(parser.current.type)->prec >= prec && !parser.panic)
 	{
+		if (get_rule(parser.current.type)->prec == PREC_PRIMARY) 
+		{
+			error(&parser.current, "Expect an operator here.");
+			break;
+		}
+
 		advance();	// consume the infix operator
 		// find the appropriate function to parse the second operand
 		ParseFn infix_rule = get_rule(parser.prev.type)->infix;
@@ -266,6 +313,16 @@ static void expression()
 	parse_precedence(PREC_ASSIGNMENT);
 }
 
+static int resolve_variable(Compiler * compiler, Token * name)
+{
+	for (int i = compiler->local_count - 1; i >= 0; i--) {
+		Local * current_local = &compiler->locals[i];
+		if (identifier_equal(name, &current_local->name))
+			return i;
+	}
+	return -1;
+}
+
 static void assignment()
 {
 	if (parser.prev_prec >= PREC_ASSIGNMENT)
@@ -277,19 +334,32 @@ static void assignment()
 	// since the previous identifier is added recently, it lies on top
 	// of the constant pool
 	uint32_t iden_offset = current_chunk()->constants.size - 1;
+	Token name = parser.consumed_identifier;	// used to resolve variable's name
+
 	parse_precedence(PREC_ASSIGNMENT);
-	emit_param_inst(OP_SET_GLOBAL, iden_offset, 3);
+	uint32_t stack_index = resolve_variable(current, &name);
+
+	if (stack_index == -1)
+		emit_param_inst(OP_SET_GLOBAL, iden_offset, 3);
+	else
+		emit_param_inst(OP_SET_LOCAL, stack_index, 3);
 }
 
 static void variable()
 {
+	parser.consumed_identifier = parser.prev;
 	uint32_t offset = identifier_constant(&parser.prev);
-	// build bytecodes, format: <opcode> <three-byte offset>
 	
 	// if the next operation is assignment, no need to load the variable
 	// to the stack
-	if (parser.current.type != TK_EQUAL)
+	if (parser.current.type == TK_EQUAL)
+		return;
+	
+	uint32_t stack_index = resolve_variable(current, &parser.prev);
+	if (stack_index == -1)
 		emit_param_inst(OP_GET_GLOBAL, offset, 3);
+	else
+		emit_param_inst(OP_GET_LOCAL, stack_index, 3);
 }
 
 
@@ -297,6 +367,8 @@ static void declaration()
 {
 	if (match(TK_VAR))
 		var_declaration();
+	else if (match(TK_LEFT_BRACE))
+		block_stmt();
 	else
 		stmt();
 
@@ -316,18 +388,55 @@ static void var_declaration()
 	// parse the identifier and construct a string object (StringObj)
 	// representing the identifier. The object is put in the constant pool.
 	// offset -> offset of the object in the constant pool
-	uint32_t offset = parse_identifier("Expect an identifier.");
 
-	if (match(TK_EQUAL))
-		expression();
-	else
-		emit_byte(OP_NIL);
+	do {
+		uint32_t offset = parse_identifier("Expect an identifier.");
+		declare_variable();
+		if (match(TK_EQUAL))
+			expression();
+		else
+			emit_byte(OP_NIL);
+		define_variable(offset);
+	} while (match(TK_COMMA));
+
 	consume(TK_SEMICOLON, "Expect ';' after statement.");
-	define_variable(offset);
+}
+
+static void add_local(Token name)
+{
+	/** TODO: handle the case in which number of items
+	 * exceeds 255 (UINT8_MAX) */
+	current->locals[current->local_count] = 
+		(Local) { name, current->scope_depth };
+	current->local_count++;
+}
+
+static void declare_variable()
+{
+	if (current->scope_depth == 0)
+		return;
+	Token name = parser.consumed_identifier;
+	for (Local * local_it = &current->locals[current->local_count - 1];
+			local_it >= &current->locals; local_it--) 
+	{
+		if (local_it->depth != -1 && local_it->depth < current->scope_depth) {
+			// does the iterator go 'outside' of the current scope?
+			//
+			break;
+		}
+
+		if (identifier_equal(&name, &local_it->name)) {
+			error(&name, "Redeclare variable inside scope.");
+			return;
+		}
+	}
+	add_local(name);
 }
 
 static void define_variable(uint32_t offset)
 {
+	if (current->scope_depth > 0)
+		return;
 	emit_param_inst(OP_DEFINE_GLOBAL, offset, 3);
 }
 
@@ -339,6 +448,7 @@ static void define_variable(uint32_t offset)
 static uint32_t parse_identifier(const char * error_msg)
 {
 	consume(TK_IDENTIFIER, error_msg);
+	parser.consumed_identifier = parser.prev;
 	Value identifier = OBJ_VAL(
 			*StringObj_construct(parser.prev.start, parser.prev.length)
 			);
@@ -357,6 +467,43 @@ static void expression_stmt()
 	expression();
 	consume(TK_SEMICOLON, "Expect a ';' after statement.");
 	emit_byte(vm.repl ? OP_PRINT : OP_POP);
+}
+
+static void begin_scope()
+{
+	current->scope_depth++;
+}
+
+static void end_scope()
+{
+	/** Remove all current scope's local variable representations
+	 *  from @current->locals.
+	 */
+	for (Local * local_it = &current->locals[current->local_count - 1];
+			local_it >= &current->locals; local_it--) 
+	{
+		if (local_it->depth != -1 && local_it->depth < current->scope_depth)
+			break;
+		current->local_count--;
+
+		// Local variables are looked up in the virtual machine's stack
+		// so we need to add a pop instruction corresponding to each local variable
+		emit_byte(OP_POP);
+	}
+
+	current->scope_depth--;
+}
+
+static void block_stmt()
+{
+	begin_scope();
+	while (!(check(TK_RIGHT_BRACE) || check(TK_EOF)))
+	{
+		declaration();
+	}
+
+	consume(TK_RIGHT_BRACE, "Expect '}' at the end of block.");
+	end_scope();
 }
 
 // parse statements that are not declaration type
@@ -468,6 +615,8 @@ bool compile(const char * source, Chunk * chunk)
 {
 	scanner_init(source);
 	parser_init();
+	Compiler compiler;
+	compiler_init(&compiler);
 	compiling_chunk = chunk;
 	
  	// tell the parser to look at the very first token, but not consume it yet
@@ -479,6 +628,7 @@ bool compile(const char * source, Chunk * chunk)
 	disassemble_chunk(current_chunk(), "Disassemble bytecodes");
 #endif
 	scanner_free();
+	compiler_free();
 	end_compiler();
 	return !parser.error;
 }

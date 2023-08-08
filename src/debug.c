@@ -128,6 +128,10 @@ int disassemble_inst(Chunk *chunk, int offset)
 			return const_long_instruction("OP_GET_GLOBAL", chunk, offset);
 		case OP_SET_GLOBAL:
 			return const_long_instruction("OP_SET_GLOBAL", chunk, offset);
+		case OP_GET_LOCAL:
+			return const_long_instruction("OP_GET_LOCAL", chunk, offset);
+		case OP_SET_LOCAL:
+			return const_long_instruction("OP_SET_LOCAL", chunk, offset);
 		case OP_EXIT:
 			return simple_instruction("OP_EXIT", offset);
 		default:

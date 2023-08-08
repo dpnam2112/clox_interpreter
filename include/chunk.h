@@ -34,20 +34,18 @@ typedef enum
 	OP_DEFINE_GLOBAL,
 	OP_GET_GLOBAL,
 	OP_SET_GLOBAL,
-
 	OP_TRUE,
 	OP_FALSE,
 	OP_NIL,
 	OP_LESS,
 	OP_GREATER,
 	OP_EQUAL,
-
-	/* Simple arithmetic operations: addition, subtraction, multiplication, division
-	 * these instructions take two values on the top of the vm's stack as their parameters */
 	OP_ADD,
 	OP_SUBTRACT,
 	OP_MUL,
 	OP_DIV,
+	OP_GET_LOCAL,
+	OP_SET_LOCAL,
 
 	/* Metadata */
 	META_LINE_NUM,		// line numbers

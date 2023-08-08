@@ -98,7 +98,7 @@ static void runtime_error(const char * format, ...)
 static uint32_t read_bytes(uint8_t byte_count)
 {
 	if (byte_count > 4) byte_count = 4;
-	uint32_t bytes;
+	uint32_t bytes = 0;
 	memcpy(&bytes, vm.pc, byte_count);
 	vm.pc += byte_count;
 	return bytes;
@@ -128,12 +128,15 @@ do {\
 	{
 #ifdef DBG_TRACE_EXECUTION
 		/* Print stack values */
-		printf("	");
 		for (Value * ptr = vm.stack; ptr < vm.stack_top; ++ptr)
 		{
+			if (ptr == vm.stack)
+				printf("	");
 			printf("[ ");
 			print_value(*ptr);
 			printf(" ]\n");
+			if (ptr + 1 == vm.stack_top)
+				printf("\n");
 		}
 #endif
 		uint8_t inst;
@@ -293,6 +296,19 @@ do {\
 					table_delete(&vm.globals, identifier, NULL);
 					return INTERPRET_RUNTIME_ERROR;
 				}
+				break;
+			}
+		case OP_GET_LOCAL:
+			{
+				uint32_t stack_index = read_bytes(3);
+				Value local_val = vm.stack[stack_index];
+				vm_stack_push(local_val);
+				break;
+			}
+		case OP_SET_LOCAL:
+			{
+				uint32_t stack_index = read_bytes(3);
+				vm.stack[stack_index] = vm_stack_peek(0);
 				break;
 			}
 		}

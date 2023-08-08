@@ -37,8 +37,8 @@ all:  $(addprefix $(OBJ_DIR)/, $(MAIN_OBJS))
 test:	$(OBJ_FILES) $(TEST_SRC)/*
 	$(CC) $(COMMON_FLAGS) $(addprefix $(OBJ_DIR)/, $(OBJ_FILES)) $(TEST_SRC)/*.c -o $(TEST_EXEC)
 
-$(OBJ_DIR)/main.o: $(addprefix $(SRC)/, $(filter %.c, $(memory_dp))) \
-		$(addprefix $(INCLUDE)/, $(filter %.h, $(memory_dp)))
+$(OBJ_DIR)/main.o: $(addprefix $(SRC)/, $(filter %.c, $(main_dp))) \
+		$(addprefix $(INCLUDE)/, $(filter %.h, $(main_dp)))
 	$(CC) -c $(COMMON_FLAGS) $(addprefix $(SRC)/, $(filter %.c, $(main_dp))) -o $(OBJ_DIR)/main.o
 
 $(OBJ_DIR)/chunk.o: $(addprefix $(SRC)/, $(filter %.c, $(chunk_dp))) \
