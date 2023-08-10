@@ -107,6 +107,7 @@ static uint32_t read_bytes(uint8_t byte_count)
 static InterpretResult run()
 {
 #define READ_BYTE() *(vm.pc++)
+#define READ_SHORT() (vm.pc += 2, *((uint16_t *) (vm.pc - 2)))
 #define READ_CONST() vm.chunk->constants.values[READ_BYTE()]
 #define READ_BYTES(dest, n)\
 	memcpy(dest, vm.pc, n);\
@@ -145,88 +146,85 @@ do {\
 		case OP_EXIT:
 			return INTERPRET_OK;
 		case OP_RETURN:
-			{
-				print_value(vm_stack_pop());
-				printf("\n");
-				break;
-			}
-		case OP_CONST:
-			{
-				Value constant = READ_CONST();
-				vm_stack_push(constant);
-				break;
-			}
-		case OP_CONST_LONG:
-			{
-				uint32_t const_offset = 0;
-				READ_BYTES(&const_offset, 3);
-				Value constant = READ_CONST_AT(const_offset);
-				vm_stack_push(constant);
-				break;
-			}
-		case OP_TRUE:
-			{
-				vm_stack_push(BOOL_VAL(true));
-				break;
-			}
-		case OP_FALSE:
-			{
-				vm_stack_push(BOOL_VAL(false));
-				break;
-			}
-		case OP_NIL:
-			{
-				vm_stack_push(NIL_VAL());
-				break;
-			}
-		case OP_NEGATE:
-			{
-				if (vm_stack_peek(0).type != VAL_NUMBER)
-				{
-					runtime_error("Cannot negate an object that is not numeric");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-
-				Value val_wrapper = vm_stack_pop();
-				double negated_val = -AS_NUMBER(val_wrapper);
-				vm_stack_push(NUMBER_VAL(negated_val));
-				break;
-			}
-		case OP_NOT:
-			{
-				Value val_wrapper = vm_stack_pop();
-				vm_stack_push(BOOL_VAL(is_falsey(val_wrapper)));
-				break;
-			}
-		case OP_ADD:
-			{
-				Value right = vm_stack_peek(0);
-				Value left = vm_stack_peek(1);
-
-				bool bothAreNums = right.type == VAL_NUMBER && left.type == VAL_NUMBER;
-				bool bothAreStrings = OBJ_TYPE(right) == OBJ_STRING && OBJ_TYPE(left) == OBJ_STRING;
-
-				if (!(bothAreNums || bothAreStrings))
-				{
-					runtime_error("Both operands must be strings or numbers");
-					return INTERPRET_RUNTIME_ERROR;
-				}
-
-				if (right.type == VAL_NUMBER)
-				{
-					vm_stack_pop();
-					vm_stack_pop();
-					vm_stack_push(NUMBER_VAL(AS_NUMBER(right) + AS_NUMBER(left)));
-				}
-				else
-					/* concatenate two strings
-					 * both operands are popped in the function */
-					concatenate();
-				break;
-
-			}
-			BINARY_OP(NUMBER_VAL, +);
+		{
+			print_value(vm_stack_pop());
+			printf("\n");
 			break;
+		}
+		case OP_CONST:
+		{
+			Value constant = READ_CONST();
+			vm_stack_push(constant);
+			break;
+		}
+		case OP_CONST_LONG:
+		{
+			uint32_t const_offset = 0;
+			READ_BYTES(&const_offset, 3);
+			Value constant = READ_CONST_AT(const_offset);
+			vm_stack_push(constant);
+			break;
+		}
+		case OP_TRUE:
+		{
+			vm_stack_push(BOOL_VAL(true));
+			break;
+		}
+		case OP_FALSE:
+		{
+			vm_stack_push(BOOL_VAL(false));
+			break;
+		}
+		case OP_NIL:
+		{
+			vm_stack_push(NIL_VAL());
+			break;
+		}
+		case OP_NEGATE:
+		{
+			if (vm_stack_peek(0).type != VAL_NUMBER)
+			{
+				runtime_error("Cannot negate an object that is not numeric");
+				return INTERPRET_RUNTIME_ERROR;
+			}
+
+			Value val_wrapper = vm_stack_pop();
+			double negated_val = -AS_NUMBER(val_wrapper);
+			vm_stack_push(NUMBER_VAL(negated_val));
+			break;
+		}
+		case OP_NOT:
+		{
+			Value val_wrapper = vm_stack_pop();
+			vm_stack_push(BOOL_VAL(is_falsey(val_wrapper)));
+			break;
+		}
+		case OP_ADD:
+		{
+			Value right = vm_stack_peek(0);
+			Value left = vm_stack_peek(1);
+
+			bool bothAreNums = right.type == VAL_NUMBER && left.type == VAL_NUMBER;
+			bool bothAreStrings = OBJ_TYPE(right) == OBJ_STRING && OBJ_TYPE(left) == OBJ_STRING;
+
+			if (!(bothAreNums || bothAreStrings))
+			{
+				runtime_error("Both operands must be strings or numbers");
+				return INTERPRET_RUNTIME_ERROR;
+			}
+
+			if (right.type == VAL_NUMBER)
+			{
+				vm_stack_pop();
+				vm_stack_pop();
+				vm_stack_push(NUMBER_VAL(AS_NUMBER(right) + AS_NUMBER(left)));
+			}
+			else
+				/* concatenate two strings
+				* both operands are popped in the function */
+				concatenate();
+			break;
+		}
 		case OP_SUBTRACT:
 			BINARY_OP(NUMBER_VAL, -);
 			break;
@@ -237,12 +235,12 @@ do {\
 			BINARY_OP(NUMBER_VAL, /);
 			break;
 		case OP_EQUAL:
-			{
-				Value x = vm_stack_pop();
-				Value y = vm_stack_pop();
-				vm_stack_push(BOOL_VAL(value_equal(x, y)));
-				break;
-			}
+		{
+			Value x = vm_stack_pop();
+			Value y = vm_stack_pop();
+			vm_stack_push(BOOL_VAL(value_equal(x, y)));
+			break;
+		}
 		case OP_LESS:
 			BINARY_OP(BOOL_VAL, <);
 			break;
@@ -253,69 +251,91 @@ do {\
 			vm.pc += 2;
 			break;
 		case OP_PRINT:
-			{
-				Value value = vm_stack_pop();
-				print_value(value);
-				printf("\n");
-				break;
-			}
+		{
+			Value value = vm_stack_pop();
+			print_value(value);
+			printf("\n");
+			break;
+		}
 		case OP_POP:
-			{
-				vm_stack_pop();
-				break;
-			}
+		{
+			vm_stack_pop();
+			break;
+		}
 		case OP_DEFINE_GLOBAL:
-			{
-				uint32_t iden_offset = read_bytes(3);
-				StringObj * identifier = AS_OBJ(READ_CONST_AT(iden_offset));
-				table_set(&vm.globals, identifier, vm_stack_peek(0));
-				vm_stack_pop();
-				break;
-			}
+		{
+			uint32_t iden_offset = read_bytes(3);
+			StringObj * identifier = AS_OBJ(READ_CONST_AT(iden_offset));
+			table_set(&vm.globals, identifier, vm_stack_peek(0));
+			vm_stack_pop();
+			break;
+		}
 		case OP_GET_GLOBAL:
+		{
+			uint32_t offset = read_bytes(3);
+			StringObj * identifier = AS_OBJ(READ_CONST_AT(offset));
+			Value value;
+			if (!table_get(&vm.globals, identifier, &value))
 			{
-				uint32_t offset = read_bytes(3);
-				StringObj * identifier = AS_OBJ(READ_CONST_AT(offset));
-				Value value;
-				if (!table_get(&vm.globals, identifier, &value))
-				{
-					runtime_error("Undefined identifier: '%s'.", identifier->chars);
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				else
-					vm_stack_push(value);
-				break;
+				runtime_error("Undefined identifier: '%s'.", identifier->chars);
+				return INTERPRET_RUNTIME_ERROR;
 			}
+			else
+				vm_stack_push(value);
+			break;
+		}
 		case OP_SET_GLOBAL:
+		{
+			uint32_t offset = read_bytes(3);
+			StringObj * identifier = AS_OBJ(READ_CONST_AT(offset));
+			if (table_set(&vm.globals, identifier, vm_stack_peek(0)))
 			{
-				uint32_t offset = read_bytes(3);
-				StringObj * identifier = AS_OBJ(READ_CONST_AT(offset));
-				if (table_set(&vm.globals, identifier, vm_stack_peek(0)))
-				{
-					runtime_error("Undefined identifier: '%s'.", identifier->chars);
-					table_delete(&vm.globals, identifier, NULL);
-					return INTERPRET_RUNTIME_ERROR;
-				}
-				break;
+				runtime_error("Undefined identifier: '%s'.", identifier->chars);
+				table_delete(&vm.globals, identifier, NULL);
+				return INTERPRET_RUNTIME_ERROR;
 			}
+			break;
+		}
 		case OP_GET_LOCAL:
-			{
-				uint32_t stack_index = read_bytes(3);
-				Value local_val = vm.stack[stack_index];
-				vm_stack_push(local_val);
-				break;
-			}
+		{
+			uint32_t stack_index = read_bytes(3);
+			Value local_val = vm.stack[stack_index];
+			vm_stack_push(local_val);
+			break;
+		}
 		case OP_SET_LOCAL:
+		{
+			uint32_t stack_index = read_bytes(3);
+			vm.stack[stack_index] = vm_stack_peek(0);
+			break;
+		}
+		case OP_JMP_IF_FALSE:
+		{
+			uint16_t jmp_dist = READ_SHORT();
+			if (is_falsey(vm_stack_peek(0)))
 			{
-				uint32_t stack_index = read_bytes(3);
-				vm.stack[stack_index] = vm_stack_peek(0);
-				break;
+				vm.pc += jmp_dist;
 			}
+			break;
+		}
+		case OP_JMP:
+		{
+			uint16_t jmp_dist = READ_SHORT();
+			vm.pc += jmp_dist;
+			break;
+		}
+		case OP_LOOP:
+		{
+			uint32_t jmp_dist = READ_SHORT();
+			vm.pc -= jmp_dist;
+			break;
+		}
 		}
 	}
 
 #undef READ_BYTE
 #undef READ_BYTES
+#undef READ_SHORT
 #undef READ_CONST
 #undef READ_CONST_AT
 }

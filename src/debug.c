@@ -54,6 +54,24 @@ int const_long_instruction(const char * name, Chunk * chunk, int offset)
 	return offset + 4;
 }
 
+int jump_instruction(const char * name, Chunk * chunk, int offset)
+{
+	uint16_t jmp_dist = *((uint16_t *) &(chunk->bytecodes[offset + 1]));
+	uint32_t jmp_start = offset + 3;
+	uint32_t jmp_dest = jmp_start + jmp_dist;
+	printf("%-16s %4u -> %u\n", name, jmp_start, jmp_dest);
+	return offset + 3;
+}
+
+int loop_instruction(const char * name, Chunk * chunk, int offset)
+{
+	uint16_t jmp_dist = *((uint16_t *) &(chunk->bytecodes[offset + 1]));
+	uint32_t jmp_start = offset + 3;
+	uint32_t jmp_dest = jmp_start - jmp_dist;
+	printf("%-16s %4u -> %u\n", name, jmp_start, jmp_dest);
+	return offset + 3;
+}
+
 int line_number(Chunk * chunk, int offset)
 {
 	uint16_t line;
@@ -132,6 +150,12 @@ int disassemble_inst(Chunk *chunk, int offset)
 			return const_long_instruction("OP_GET_LOCAL", chunk, offset);
 		case OP_SET_LOCAL:
 			return const_long_instruction("OP_SET_LOCAL", chunk, offset);
+		case OP_JMP:
+			return jump_instruction("OP_JMP", chunk, offset);
+		case OP_JMP_IF_FALSE:
+			return jump_instruction("OP_JMP_IF_FALSE", chunk, offset);
+		case OP_LOOP:
+			return loop_instruction("OP_LOOP", chunk, offset);
 		case OP_EXIT:
 			return simple_instruction("OP_EXIT", offset);
 		default:

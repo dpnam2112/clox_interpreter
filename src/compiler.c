@@ -17,7 +17,7 @@ Local;
 
 typedef struct Compiler
 {
-	Local * locals[UINT8_MAX];
+	Local locals[UINT8_MAX];
 	Table const_global;
 	int local_count;
 	int scope_depth;
@@ -92,11 +92,36 @@ static void emit_param_inst(Opcode opcode, uint32_t param, uint8_t param_sz)
 	emit_bytes(&param, param_sz);
 }
 
+static uint32_t emit_jump(Opcode jmp_opcode)
+{
+	emit_byte(jmp_opcode);
+	// parameter's starting position
+	uint32_t jmp_param_pos = current_chunk()->size;
+	// placeholder for parameter
+	emit_byte(0xff);
+	emit_byte(0xff);
+	return jmp_param_pos;
+}
+
+static void emit_loop(uint32_t loop_start)
+{
+	emit_byte(OP_LOOP);
+	uint32_t offset = current_chunk()->size + 2 - loop_start;
+	if (offset > UINT16_MAX)
+		error(&parser.prev, "Loop body is too large.");
+	emit_bytes(&offset, 2);
+}
+
 /** @emit_const_inst: write a load instruction that load @val
  * to the virtual machine.
  */
 static void emit_const_inst(Value val)
 {
+	if (chunk_get_const_pool_size(current_chunk()) + 1 > CONST_POOL_LIMIT)
+	{
+		error(&parser.current, "[Memory error] Too much constant in one chunk.");
+	}
+
 	chunk_write_load_const(current_chunk(), val, parser.prev.line);
 }
 
@@ -200,9 +225,14 @@ static void assignment();
 static void stmt();
 static void block_stmt();
 static void var_declaration();
+static void if_stmt();
+static void while_stmt();
+static void for_stmt();
 static uint32_t parse_identifier(const char * error_msg);
-static void declare_variable();
+static void declare_variable(Token name);
 static void define_variable(uint32_t offset);
+static void and_();
+static void or_();
 
 typedef void (*ParseFn) ();	// pointer to a parsing function
 
@@ -241,13 +271,13 @@ ParseRule parse_rules[] = {
   [TK_IDENTIFIER]    = {variable,     NULL,   PREC_NONE},
   [TK_STRING]        = {string,     NULL,   PREC_PRIMARY},
   [TK_NUMBER]        = {number,   NULL,   PREC_PRIMARY},
-  [TK_AND]           = {NULL,     binary, PREC_AND},
+  [TK_AND]           = {NULL,     and_, PREC_AND},
   [TK_CLASS]         = {NULL,     NULL,   PREC_NONE},
   [TK_ELSE]          = {NULL,     NULL,   PREC_NONE},
   [TK_FOR]           = {NULL,     NULL,   PREC_NONE},
   [TK_FUN]           = {NULL,     NULL,   PREC_NONE},
   [TK_IF]            = {NULL,     NULL,   PREC_NONE},
-  [TK_OR]            = {NULL,     binary, PREC_OR},
+  [TK_OR]            = {NULL,     or_, PREC_OR},
   [TK_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TK_RETURN]        = {NULL,     NULL,   PREC_NONE},
   [TK_SUPER]         = {NULL,     NULL,   PREC_NONE},
@@ -367,13 +397,65 @@ static void declaration()
 {
 	if (match(TK_VAR))
 		var_declaration();
-	else if (match(TK_LEFT_BRACE))
-		block_stmt();
 	else
 		stmt();
 
 	if (parser.panic)
 		synchronize();
+}
+
+static uint16_t patch_jump(uint32_t jmp_param_pos)
+{
+	// the position where the jump starts. We read the jump parameter before starting to jump.
+	uint32_t jump_pos = jmp_param_pos + 2;
+	uint32_t dest = current_chunk()->size;
+	uint32_t jump_dist = dest - jump_pos;
+	if (jump_dist >= UINT16_MAX) 
+	{
+		error(&parser.prev, "Too much bytecodes to jump.");
+		return 0;
+	}
+	memcpy(&(current_chunk()->bytecodes[jmp_param_pos]), &jump_dist, 2);
+	return (uint16_t) jump_dist;
+}
+
+static void if_stmt()
+{
+	consume(TK_LEFT_PAREN, "Expect '(' after 'if'.");
+	expression();
+	consume(TK_RIGHT_PAREN, "Expect ')' after condition.");
+	uint32_t jmp_then = emit_jump(OP_JMP_IF_FALSE);
+	stmt();
+	if (match(TK_ELSE))
+	{
+		uint32_t jmp_else = emit_jump(OP_JMP);
+		patch_jump(jmp_then);
+		stmt();
+		patch_jump(jmp_else);
+	}
+	else
+		patch_jump(jmp_then);
+	
+	// pop the condition expression's result
+	emit_byte(OP_POP);
+}
+
+static void and_()
+{
+	uint32_t jmp_param_pos = emit_jump(OP_JMP_IF_FALSE);
+	emit_byte(OP_POP);
+	parse_precedence(PREC_AND);
+	patch_jump(jmp_param_pos);
+}
+
+static void or_()
+{
+	uint32_t left_is_false_jmp = emit_jump(OP_JMP_IF_FALSE);
+	uint32_t jmp_out = emit_jump(OP_JMP);
+	patch_jump(left_is_false_jmp);
+	emit_byte(OP_POP);
+	parse_precedence(PREC_OR);
+	patch_jump(jmp_out);
 }
 
 /* var_declaration(): parse the var declaration statement
@@ -391,11 +473,12 @@ static void var_declaration()
 
 	do {
 		uint32_t offset = parse_identifier("Expect an identifier.");
-		declare_variable();
+		Token name = parser.consumed_identifier;
 		if (match(TK_EQUAL))
 			expression();
 		else
 			emit_byte(OP_NIL);
+		declare_variable(name);
 		define_variable(offset);
 	} while (match(TK_COMMA));
 
@@ -411,17 +494,15 @@ static void add_local(Token name)
 	current->local_count++;
 }
 
-static void declare_variable()
+static void declare_variable(Token name)
 {
 	if (current->scope_depth == 0)
 		return;
-	Token name = parser.consumed_identifier;
 	for (Local * local_it = &current->locals[current->local_count - 1];
 			local_it >= &current->locals; local_it--) 
 	{
 		if (local_it->depth != -1 && local_it->depth < current->scope_depth) {
 			// does the iterator go 'outside' of the current scope?
-			//
 			break;
 		}
 
@@ -506,11 +587,89 @@ static void block_stmt()
 	end_scope();
 }
 
+static void while_stmt()
+{
+	// condition expression
+	consume(TK_LEFT_PAREN, "Expect '(' after 'while'.");
+	uint32_t condition_pos = current_chunk()->size;
+	expression();
+	consume(TK_RIGHT_PAREN, "Expect ')' after expression.");
+
+	// skip the loop statement if the expression is 'false'
+	uint32_t out_of_loop_jmp = emit_jump(OP_JMP_IF_FALSE);
+	emit_byte(OP_POP);
+
+	// loop body
+	stmt();
+	emit_loop(condition_pos);
+	patch_jump(out_of_loop_jmp);
+	emit_byte(OP_POP);
+}
+
+// Desugar for-loop to while-loop 
+static void for_stmt()
+{
+	// flow of a for-loop: initialization -> check condition -> execute body
+	// -> increment -> jump back to checking condition
+
+	begin_scope();
+	consume(TK_LEFT_PAREN, "Expect '(' after 'for'.");
+
+	// parse loop initializer
+	if (match(TK_VAR))
+		var_declaration();
+	else
+		expression_stmt();
+
+	uint32_t condition_start = current_chunk()->size;
+
+	// parse loop condition
+	if (match(TK_SEMICOLON))
+		emit_byte(OP_TRUE);
+	else
+	{
+		expression();
+		consume(TK_SEMICOLON, "Expect ';' after expression.");
+	}
+
+	int exit_loop = emit_jump(OP_JMP_IF_FALSE);
+	emit_byte(OP_POP);	// discard the condition expression's value
+	int enter_body = emit_jump(OP_JMP);
+	int increment_start = current_chunk()->size;
+
+	// parse the increment expression
+	if (!check(TK_RIGHT_PAREN))
+	{
+		expression();
+		emit_byte(OP_POP);
+	}
+	consume(TK_RIGHT_PAREN, "Expect ')' after increment expression.");
+
+	emit_loop(condition_start);	// jump back to condition expression
+	patch_jump(enter_body);	// reach body, patch the to-body jump
+	if (!match(TK_SEMICOLON))
+		stmt();
+	else
+		consume(TK_SEMICOLON, "Expect ';' after for-loop if there is no loop statement.");
+	emit_loop(increment_start);	// jump back to increment expression if the body is executed
+	patch_jump(exit_loop); // the body is parsed, patch the exit-loop jump
+	emit_byte(OP_POP); 	// discard the condition's value if we are out of loop
+	end_scope();
+}
+
 // parse statements that are not declaration type
 static void stmt()
 {
 	if (match(TK_PRINT))
 		print_stmt();
+	else if (match(TK_LEFT_BRACE))
+		block_stmt();
+	else if (match(TK_IF))
+		if_stmt();
+	else if (match(TK_WHILE))
+		while_stmt();
+	else if (match(TK_FOR))
+		for_stmt();
 	else
 		expression_stmt();
 }

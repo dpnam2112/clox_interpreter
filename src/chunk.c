@@ -56,11 +56,18 @@ int get_inst_size(Opcode type)
 	switch (type)
 	{
 	case OP_CONST:
-		return OP_CONST_SZ;
+		return 2;
+	case OP_JMP:
+	case OP_JMP_IF_FALSE:
+	case OP_LOOP:
+		return 3;
+	case OP_GET_LOCAL:
+	case OP_SET_LOCAL:
+	case OP_DEFINE_GLOBAL:
+	case OP_GET_GLOBAL:
+	case OP_SET_GLOBAL:
 	case OP_CONST_LONG:
-		return OP_CONST_LONG_SZ;
-	case META_LINE_NUM:
-		return META_LINE_NUM_SZ;
+		return 4;
 	default:
 		return 1;
 	}
@@ -90,6 +97,11 @@ void chunk_append_bytes(Chunk * chunk, void * bytes, int n)
 
 uint32_t chunk_add_const(Chunk * chunk, Value value)
 {
+	if (chunk->constants.size + 1 > CONST_POOL_LIMIT)
+	{
+		return 0;	// dummy offset
+	}
+
 	value_arr_append(&chunk->constants, value);
 	return chunk->constants.size - 1;
 }
@@ -100,12 +112,15 @@ void chunk_write_load_const(Chunk * chunk, Value value, uint16_t line)
 	uint32_t const_offset = 0;
 	const_offset = chunk_add_const(chunk, value);
 
-	// add instruction
+	// add instruction's opcode
 	chunk_append(chunk,
 		(const_offset <= UINT8_MAX) ? OP_CONST : OP_CONST_LONG, line);
 
-	// we consider values of OP_CONST_LONG take up three bytes if
-	// they exceed UINT8_MAX (255)
+	// parameter of OP_CONST_LONG takes up 3 bytes
 	chunk_append_bytes(chunk, &const_offset,
 			(const_offset <= UINT8_MAX) ? 1 : 3);
+}
+
+uint32_t chunk_get_const_pool_size(Chunk * chunk) {
+	return chunk->constants.size;
 }

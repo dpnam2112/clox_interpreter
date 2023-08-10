@@ -7,25 +7,13 @@
 
 #define INIT_SIZE 8
 
-/* Define size of each instruction type */
-#define OP_CONST_SZ 2
-#define OP_CONST_LONG_SZ 4
-#define META_LINE_NUM_SZ 3
-#define OP_RETURN_SZ 1
-#define OP_NEGATE_SZ 1
-#define OP_ADD_SZ 1
-#define OP_SUBTRACT_SZ 1
-#define OP_MUL_SZ 1
-#define OP_DIV_SZ 1
-
 typedef enum
 {
-	/* OP_CONST_*: Load a constant from constant pool to the vm's stack */
-	OP_CONST,	// constant offsets that take up one byte
-	OP_CONST_LONG,	// constant offsets that take up two bytes
+	OP_CONST,
+	OP_CONST_LONG,
 	OP_RETURN,
-	OP_NEGATE,	// Negate the top value of the vm's stack and return the negated value
-	OP_EXIT,	// Exit program
+	OP_NEGATE,
+	OP_EXIT,
 	OP_AND,
 	OP_OR,
 	OP_NOT,
@@ -46,9 +34,10 @@ typedef enum
 	OP_DIV,
 	OP_GET_LOCAL,
 	OP_SET_LOCAL,
-
-	/* Metadata */
-	META_LINE_NUM,		// line numbers
+	OP_JMP_IF_FALSE,
+	OP_JMP,
+	OP_LOOP,
+	META_LINE_NUM,
 } Opcode;
 
 // Dynamic array of bytecodes
@@ -83,4 +72,6 @@ void chunk_write_load_const(Chunk * chunk, Value value, uint16_t line);
 
 /* Get the line where the bytecode at index is interpreted  */
 uint16_t chunk_get_line(Chunk * chunk, uint32_t index);
+
+uint32_t chunk_get_const_pool_size(Chunk * chunk);
 #endif
