@@ -743,7 +743,7 @@ static void for_stmt()
 	// parse loop initializer
 	if (match(TK_VAR))
 		var_declaration();
-	else
+	else if (!match(TK_SEMICOLON))
 		expression_stmt();
 
 	uint32_t condition_start = current_chunk()->size;
