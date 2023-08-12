@@ -30,6 +30,9 @@ typedef enum
   TK_PRINT, TK_RETURN, TK_SUPER, TK_THIS,
   TK_TRUE, TK_VAR, TK_WHILE,
 
+  // Loop control
+  TK_BREAK, TK_CONTINUE,
+
   TK_ERROR, TK_EOF,
 }
 TokenType;

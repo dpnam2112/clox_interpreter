@@ -27,6 +27,7 @@
  * old_sz = any, new_sz = 0: free that array
  * */
 void * reallocate(void * arr, size_t old_sz, size_t new_sz);
+void * append_array(void * ptr, size_t item_sz, int arr_size, int arr_capacity, void * item);
 void free_objects();
 
 #endif

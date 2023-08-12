@@ -182,7 +182,17 @@ static TokenType identifier_type()
 	case 'v': return check_keyword(1, 2, "ar", TK_VAR);
 	case 'a': return check_keyword(1, 2, "nd", TK_AND);
 	case 'o': return check_keyword(1, 1, "r", TK_OR);
-	case 'c': return check_keyword(1, 4, "lass", TK_CLASS);
+	case 'c':
+		if (scanner.current - scanner.start > 1)
+		{
+			switch (scanner.start[1])
+			{
+				case 'l': return check_keyword(2, 3, "ass", TK_CLASS);
+				case 'o': return check_keyword(2, 6, "ntinue", TK_CONTINUE);
+				default: break;
+			}
+		} 
+		break;
 	case 'n': return check_keyword(1, 2, "il", TK_NIL);
 	case 's': return check_keyword(1, 4, "uper", TK_SUPER);
 	case 'p': return check_keyword(1, 4, "rint", TK_PRINT);
@@ -212,6 +222,7 @@ static TokenType identifier_type()
 		  }
 		  break;
 	case 'w': return check_keyword(1, 4, "hile", TK_WHILE);
+	case 'b': return check_keyword(1, 4, "reak", TK_BREAK);
 	}
 	return TK_IDENTIFIER;
 }

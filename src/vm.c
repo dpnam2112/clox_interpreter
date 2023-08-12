@@ -38,6 +38,12 @@ void vm_stack_push(Value value)
 
 Value vm_stack_pop()
 {
+	if (vm.stack_top == vm.stack)
+	{
+		printf("[memory error] pop empty stack.");
+		exit(1);
+	}
+
 	return *(--vm.stack_top);
 }
 
@@ -140,7 +146,7 @@ do {\
 				printf("\n");
 		}
 #endif
-		uint8_t inst;
+		Opcode inst;
 		switch (inst = READ_BYTE())
 		{
 		case OP_EXIT:
@@ -281,7 +287,9 @@ do {\
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			else
+			{
 				vm_stack_push(value);
+			}
 			break;
 		}
 		case OP_SET_GLOBAL:
@@ -313,9 +321,7 @@ do {\
 		{
 			uint16_t jmp_dist = READ_SHORT();
 			if (is_falsey(vm_stack_peek(0)))
-			{
 				vm.pc += jmp_dist;
-			}
 			break;
 		}
 		case OP_JMP:

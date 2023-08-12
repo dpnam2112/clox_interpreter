@@ -5,8 +5,29 @@
 #include "vm.h"
 #include "value.h"
 #include "object.h"
+#include "memory.h"
 #include <stdlib.h>
 #include <math.h>
+
+typedef struct IntArr
+{
+	int * head;
+	int size;
+	int capacity;
+} IntArr;
+
+typedef struct Parser
+{
+	Token prev;
+	Token current;
+	Token consumed_identifier;	// identifier that is consumed recently
+	bool error;	// was there any parse error occured?
+	bool panic;	// should the parser enter panic mode?
+	Precedence prev_prec;
+	IntArr * breaks;
+	IntArr * continues;
+}
+Parser;
 
 typedef struct Local
 {
@@ -28,6 +49,30 @@ Parser parser;
 Chunk * compiling_chunk;
 Compiler * current = NULL;
 
+static int_arr_init(IntArr * arr)
+{
+	arr->head = ALLOCATE(int, 10);
+	arr->size = 0;
+	arr->capacity = 10;
+}
+
+static int_arr_free(IntArr * arr)
+{
+	FREE_ARRAY(int, arr->head, arr->capacity);
+	arr->capacity = arr->size = 0;
+} 
+
+static int_arr_append(IntArr * arr, int item)
+{
+	if (arr->size + 1 == arr->capacity)
+	{
+		int old_cap = arr->capacity;
+		arr->capacity = GROW_CAPACITY(old_cap);
+		arr->capacity = GROW_ARRAY(int, arr->head, old_cap, arr->capacity);
+	}
+	arr->head[arr->size++] = item;
+}
+
 static void compiler_init(Compiler * compiler)
 {
 	compiler->scope_depth = compiler->local_count = 0;
@@ -44,6 +89,23 @@ void parser_init()
 	parser.error = false;
 	parser.panic = false;
 	parser.prev_prec = PREC_NONE;
+	parser.breaks = NULL;
+	parser.continues = NULL;
+}
+
+void parser_free()
+{
+
+}
+
+static void add_break(uint32_t jmp_param)
+{
+	int_arr_append(parser.breaks, jmp_param);
+}
+
+static void add_continue(uint32_t jmp_param)
+{
+	int_arr_append(parser.continues, jmp_param);
 }
 
 static Chunk * current_chunk()
@@ -228,6 +290,7 @@ static void var_declaration();
 static void if_stmt();
 static void while_stmt();
 static void for_stmt();
+static void break_stmt();
 static uint32_t parse_identifier(const char * error_msg);
 static void declare_variable(Token name);
 static void define_variable(uint32_t offset);
@@ -587,8 +650,52 @@ static void block_stmt()
 	end_scope();
 }
 
+static void break_stmt()
+{
+	if (parser.breaks == NULL)
+	{
+		// parser is not inside of a loop
+		error(&parser.prev, "'break' outside of a loop.");
+		consume(TK_SEMICOLON, "Expect ';' after 'break'.");
+		return;
+	}
+
+	uint32_t brk = emit_jump(OP_JMP);
+	add_break(brk);
+	consume(TK_SEMICOLON, "Expect ';' after 'break'.");
+}
+
+static void patch_break()
+{
+	if (parser.breaks == NULL) return;
+	for (int i = 0; i < parser.breaks->size; i++)
+		patch_jump(parser.breaks->head[i]);
+}
+
+static void patch_continue()
+{
+	if (parser.continues == NULL) return;
+	for (int i = 0; i < parser.continues->size; i++)
+		patch_jump(parser.continues->head[i]);
+} 
+
+static void continue_stmt()
+{
+	uint32_t jmp_param = emit_jump(OP_JMP);
+	add_continue(jmp_param);
+	consume(TK_SEMICOLON, "Expect ';' after 'continue'.");
+}
+
 static void while_stmt()
 {
+	IntArr * outer_loop_brk = parser.breaks;
+	IntArr * outer_loop_continue = parser.continues;
+	IntArr current_loop_brk, current_loop_continue;
+	int_arr_init(&current_loop_brk);
+	int_arr_init(&current_loop_continue);
+	parser.breaks = &current_loop_brk; 
+	parser.continues = &current_loop_continue;
+
 	// condition expression
 	consume(TK_LEFT_PAREN, "Expect '(' after 'while'.");
 	uint32_t condition_pos = current_chunk()->size;
@@ -601,14 +708,32 @@ static void while_stmt()
 
 	// loop body
 	stmt();
+
+	// emit instruction to jump back to the condition evaluation
+	// patch all previous jumps (including breaks and continues)
+	patch_continue();
 	emit_loop(condition_pos);
 	patch_jump(out_of_loop_jmp);
+	patch_break();
 	emit_byte(OP_POP);
+
+	parser.breaks = outer_loop_brk;
+	parser.continues = outer_loop_continue;
+	int_arr_free(&current_loop_brk);
+	int_arr_free(&current_loop_continue);
 }
 
 // Desugar for-loop to while-loop 
 static void for_stmt()
 {
+	IntArr * outer_loop_brk = parser.breaks;
+	IntArr * outer_loop_continue = parser.continues;
+	IntArr current_loop_brk, current_loop_continue;
+	int_arr_init(&current_loop_brk);
+	int_arr_init(&current_loop_continue);
+	parser.breaks = &current_loop_brk; 
+	parser.continues = &current_loop_continue;
+
 	// flow of a for-loop: initialization -> check condition -> execute body
 	// -> increment -> jump back to checking condition
 
@@ -647,14 +772,23 @@ static void for_stmt()
 
 	emit_loop(condition_start);	// jump back to condition expression
 	patch_jump(enter_body);	// reach body, patch the to-body jump
-	if (!match(TK_SEMICOLON))
+	if (!check(TK_SEMICOLON))
+	{
 		stmt();
+		patch_continue();
+	}
 	else
 		consume(TK_SEMICOLON, "Expect ';' after for-loop if there is no loop statement.");
 	emit_loop(increment_start);	// jump back to increment expression if the body is executed
 	patch_jump(exit_loop); // the body is parsed, patch the exit-loop jump
+	patch_break();
 	emit_byte(OP_POP); 	// discard the condition's value if we are out of loop
 	end_scope();
+
+	parser.breaks = outer_loop_brk;
+	parser.continues = outer_loop_continue;
+	int_arr_free(&current_loop_brk);
+	int_arr_free(&current_loop_continue);
 }
 
 // parse statements that are not declaration type
@@ -670,6 +804,10 @@ static void stmt()
 		while_stmt();
 	else if (match(TK_FOR))
 		for_stmt();
+	else if (match(TK_BREAK))
+		break_stmt();
+	else if (match(TK_CONTINUE))
+		continue_stmt();
 	else
 		expression_stmt();
 }
@@ -788,6 +926,7 @@ bool compile(const char * source, Chunk * chunk)
 #endif
 	scanner_free();
 	compiler_free();
+	parser_free();
 	end_compiler();
 	return !parser.error;
 }
