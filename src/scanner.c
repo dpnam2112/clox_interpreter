@@ -63,7 +63,6 @@ static bool match(const char c)
 	return match;
 }
 
-
 static inline char peek()
 {
 	return *scanner.current;
@@ -207,7 +206,7 @@ static TokenType identifier_type()
 			  }
 		  }
 		  break;
-	case 'r': return check_keyword(1, 4, "eturn", TK_RETURN);
+	case 'r': return check_keyword(1, 5, "eturn", TK_RETURN);
 	case 'e': return check_keyword(1, 3, "lse", TK_ELSE);
 	case 'f':
 		  if (scanner.current - scanner.start > 1)

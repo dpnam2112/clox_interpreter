@@ -4,6 +4,7 @@
 #include "common.h"
 #include "scanner.h"
 #include "chunk.h"
+#include "object.h"
 
 typedef enum
 {
@@ -23,6 +24,6 @@ typedef enum
 }
 Precedence;
 
-bool compile(const char * source, Chunk * chunk);
+ClosureObj * compile(const char * source);
 
 #endif

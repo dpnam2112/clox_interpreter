@@ -19,6 +19,9 @@ void vm_init(bool repl)
 	stack_reset();
 	table_init(&vm.strings);
 	table_init(&vm.globals);
+	vm.open_upvalues = NULL;
+	vm.objects = NULL;
+	vm.frame_count = 0;
 	vm.repl = repl;
 }
 
@@ -90,35 +93,140 @@ static void runtime_error(const char * format, ...)
 	va_end(args);
 	fputs("\n", stderr);
 
-	size_t inst_offset = vm.pc - vm.chunk->bytecodes - 1;
-	uint16_t line = chunk_get_line(vm.chunk, inst_offset);
-	fprintf(stderr, "[line %d] in script\n", line);
+	// print stack trace in the following format:
+	// line [i1], in a1()
+	// line [i2], in a2()
+	// ...
+	// line [iN], in script
+	for (CallFrame * frame = &vm.frames[vm.frame_count - 1]; frame >= vm.frames; frame--)
+	{
+		FunctionObj * function = frame->closure->function;
+		int inst_offset = frame->pc - function->chunk.bytecodes;
+		int line = chunk_get_line(&function->chunk, inst_offset);
+		fprintf(stderr, "[line %d], in ", line);
+		if (function->name == NULL)
+			fprintf(stderr, "script\n");
+		else
+			fprintf(stderr, "%s()\n", function->name->chars);
+	}
+
+//	CallFrame * frame = &vm.frames[vm.frame_count - 1];
+//	size_t inst_offset = frame->pc - frame->function->chunk.bytecodes - 1;
+//	uint16_t line = chunk_get_line(frame->function->chunk, inst_offset);
+//	fprintf(stderr, "[line %d] in script\n", line);
 	stack_reset();
 }
 
-/* read n bytes from @vm.bytecodes, starting from @start.
- * @byte_count: number of bytes which represents the offset
+/** read n bytes from a chunk
+ * @param byte_count: number of bytes which represents the offset
+ * @param pc: pointer pointing to the program counter
  *
- * @byte_count does not exceed 4. If it does, it will be changed to 4.
+ * @param byte_count does not exceed 4. If it does, it will be changed to 4.
  * return value: positive integer value */
-static uint32_t read_bytes(uint8_t byte_count)
+static uint32_t read_bytes(uint8_t ** pc, uint8_t byte_count)
 {
 	if (byte_count > 4) byte_count = 4;
 	uint32_t bytes = 0;
-	memcpy(&bytes, vm.pc, byte_count);
-	vm.pc += byte_count;
+	memcpy(&bytes, *pc, byte_count);
+	*pc += byte_count;
 	return bytes;
+}
+
+// @call: Load the closure object @closure to the vm's frame
+bool call(ClosureObj * closure, int param_count)
+{
+	// Check number of parameters
+	if (param_count != closure->function->arity)
+	{
+		runtime_error("Expect %d parameters but got %d.", closure->function->arity, param_count);
+		return false;
+	}
+
+	// Check if the frame stack is overflow
+	if (vm.frame_count >= CALL_FRAME_MAX)
+	{
+		runtime_error("Stack overflow.");
+		return false;
+	}
+
+	CallFrame * new_frame = &vm.frames[vm.frame_count++];
+
+	new_frame->closure = closure;
+	new_frame->pc = closure->function->chunk.bytecodes;
+	new_frame->slots = vm.stack_top - param_count - 1;
+
+	return true;
+}
+
+/** @capture_upval: Create an upvalue object that references to @value
+ * @param value: value that the new upvalue will reference to
+ * @return the new upvalue object.
+ * 
+ * NOTE: New upvalues will be added to the virtual machine's list of upvalues.
+ * When the virtual machine escape a scope, it will move all upvalues inside the
+ * scope to the heap space (see close_upval() for more detail).
+ */
+static UpvalueObj * capture_upval(Value * value) {
+	// Iterate through the linked list of upvalues until
+	// An upvalue object that references to @value is found
+
+	UpvalueObj *prev = NULL, *current = vm.open_upvalues; 
+	while (current != NULL && value < current->value)
+	{
+		prev = current;
+		current = current->next;
+	}
+
+	if (current != NULL && value == current->value)
+	{
+		return current;
+	}
+
+	UpvalueObj * new_upvalue = UpvalueObj_construct(value);
+	if (prev != NULL)
+	{
+		new_upvalue->next = prev->next;
+		prev->next = new_upvalue;
+	}
+	else
+	{
+		vm.open_upvalues = new_upvalue;
+	}
+
+	return new_upvalue;
+}
+
+/** @close_upvalues: Move all values referenced by upvalue objects to the heap
+ * @param last: the last upvalues to be closed
+ * 
+ * NOTE: All upvalues in the virtual machine's list of upvalues is sorted by comparing
+ * Upvalue.value, which is a pointer pointing to a value inside the stack.
+ * When an upvalue is closed, we clone the value to which the upvalue reference
+ * and put the new value inside the upvalue object.
+ */
+static void close_upvalues(Value * last)
+{
+	while (vm.open_upvalues != NULL && vm.open_upvalues->value >= last)
+	{
+		UpvalueObj * closed_upval = vm.open_upvalues;
+		closed_upval->cloned = *(closed_upval->value);
+		closed_upval->value = &closed_upval->cloned;
+		vm.open_upvalues = closed_upval->next;
+		closed_upval->next = NULL;
+	}
 }
 
 static InterpretResult run()
 {
-#define READ_BYTE() *(vm.pc++)
-#define READ_SHORT() (vm.pc += 2, *((uint16_t *) (vm.pc - 2)))
-#define READ_CONST() vm.chunk->constants.values[READ_BYTE()]
-#define READ_BYTES(dest, n)\
-	memcpy(dest, vm.pc, n);\
-	vm.pc += n
-#define READ_CONST_AT(offset) vm.chunk->constants.values[offset]
+	// current frame being executed
+	CallFrame * frame = &vm.frames[vm.frame_count - 1];
+
+#define READ_BYTE() *(frame->pc++)
+#define READ_SHORT() (frame->pc += 2, *((uint16_t *) (frame->pc - 2)))
+#define READ_BYTES(n) read_bytes(&(frame->pc), n)
+#define READ_CONST() frame->closure->function->chunk.constants.values[READ_BYTE()]
+#define READ_CONST_LONG() frame->closure->function->chunk.constants.values[READ_BYTES(3)]
+#define READ_CONST_AT(offset) frame->closure->function->chunk.constants.values[offset]
 #define BINARY_OP(value_type, op)\
 do {\
 	if (!(IS_NUMBER(vm_stack_peek(0)) && IS_NUMBER(vm_stack_peek(1)))) \
@@ -153,21 +261,23 @@ do {\
 			return INTERPRET_OK;
 		case OP_RETURN:
 		{
-			print_value(vm_stack_pop());
-			printf("\n");
+			Value return_value = vm_stack_pop();
+			vm.frame_count--;
+			if (vm.frame_count == 0)
+			{
+				vm_stack_pop();	// pop the top-level function
+				return INTERPRET_OK;
+			}
+
+			vm.stack_top = vm.frames[vm.frame_count].slots;
+			vm_stack_push(return_value);
+			frame = &vm.frames[vm.frame_count - 1];
 			break;
 		}
 		case OP_CONST:
-		{
-			Value constant = READ_CONST();
-			vm_stack_push(constant);
-			break;
-		}
 		case OP_CONST_LONG:
 		{
-			uint32_t const_offset = 0;
-			READ_BYTES(&const_offset, 3);
-			Value constant = READ_CONST_AT(const_offset);
+			Value constant = (inst == OP_CONST) ? READ_CONST() : READ_CONST_LONG();
 			vm_stack_push(constant);
 			break;
 		}
@@ -254,7 +364,7 @@ do {\
 			BINARY_OP(BOOL_VAL, >);
 			break;
 		case META_LINE_NUM:
-			vm.pc += 2;
+			READ_SHORT();
 			break;
 		case OP_PRINT:
 		{
@@ -264,13 +374,11 @@ do {\
 			break;
 		}
 		case OP_POP:
-		{
 			vm_stack_pop();
 			break;
-		}
 		case OP_DEFINE_GLOBAL:
 		{
-			uint32_t iden_offset = read_bytes(3);
+			uint32_t iden_offset = READ_BYTES(3);
 			StringObj * identifier = AS_OBJ(READ_CONST_AT(iden_offset));
 			table_set(&vm.globals, identifier, vm_stack_peek(0));
 			vm_stack_pop();
@@ -278,7 +386,7 @@ do {\
 		}
 		case OP_GET_GLOBAL:
 		{
-			uint32_t offset = read_bytes(3);
+			uint32_t offset = READ_BYTES(3);
 			StringObj * identifier = AS_OBJ(READ_CONST_AT(offset));
 			Value value;
 			if (!table_get(&vm.globals, identifier, &value))
@@ -294,7 +402,7 @@ do {\
 		}
 		case OP_SET_GLOBAL:
 		{
-			uint32_t offset = read_bytes(3);
+			uint32_t offset = READ_BYTES(3);
 			StringObj * identifier = AS_OBJ(READ_CONST_AT(offset));
 			if (table_set(&vm.globals, identifier, vm_stack_peek(0)))
 			{
@@ -306,44 +414,101 @@ do {\
 		}
 		case OP_GET_LOCAL:
 		{
-			uint32_t stack_index = read_bytes(3);
-			Value local_val = vm.stack[stack_index];
-			vm_stack_push(local_val);
+			uint32_t slot = READ_BYTES(3);
+			vm_stack_push(frame->slots[slot]);
 			break;
 		}
 		case OP_SET_LOCAL:
 		{
-			uint32_t stack_index = read_bytes(3);
-			vm.stack[stack_index] = vm_stack_peek(0);
+			uint32_t slot = READ_BYTES(3);
+			frame->slots[slot] = vm_stack_peek(0);
 			break;
 		}
 		case OP_JMP_IF_FALSE:
 		{
 			uint16_t jmp_dist = READ_SHORT();
 			if (is_falsey(vm_stack_peek(0)))
-				vm.pc += jmp_dist;
+				frame->pc += jmp_dist;
 			break;
 		}
 		case OP_JMP:
 		{
 			uint16_t jmp_dist = READ_SHORT();
-			vm.pc += jmp_dist;
+			frame->pc += jmp_dist;
 			break;
 		}
 		case OP_LOOP:
 		{
 			uint32_t jmp_dist = READ_SHORT();
-			vm.pc -= jmp_dist;
+			frame->pc -= jmp_dist;
 			break;
 		}
+		case OP_CALL:
+		{
+			uint8_t param_count = READ_BYTE();
+			Value called_obj = vm_stack_peek(param_count);
+			if (!callable(called_obj))
+			{
+				runtime_error("object is not callable.");
+				return INTERPRET_RUNTIME_ERROR;
+			}
+
+			if (!call(AS_CLOSURE(called_obj), param_count))
+				return INTERPRET_RUNTIME_ERROR;
+			frame = &vm.frames[vm.frame_count - 1];
+			break;
+		}
+		case OP_CLOSURE:
+		case OP_CLOSURE_LONG:
+		{
+			Value closure_val = (inst == OP_CLOSURE) ? READ_CONST() : READ_CONST_LONG();
+			vm_stack_push(closure_val);
+			ClosureObj * closure = AS_CLOSURE(closure_val);
+
+			for (int i = 0; i < closure->function->upval_count; i++)
+			{
+				bool local = READ_BYTE();
+				uint32_t upvalue_pos = READ_BYTES(3);
+
+				if (local) {
+					closure->upvalues[i] = capture_upval(frame->slots + upvalue_pos);
+				} else {
+					closure->upvalues[i] = frame->closure->upvalues[upvalue_pos];
+				}
+			}
+
+			break;
+		}
+		case OP_GET_UPVAL:
+		{
+			uint32_t upval_index = READ_BYTES(3);
+			UpvalueObj * upvalue = frame->closure->upvalues[upval_index];
+			vm_stack_push(*(upvalue->value));
+			break;
+		}
+		case OP_SET_UPVAL:
+		{
+			uint32_t upval_index = READ_BYTES(3);
+			UpvalueObj * upvalue = frame->closure->upvalues[upval_index];
+			*(upvalue->value) = vm_stack_peek(0);
+			break;
+		}
+		case OP_CLOSE_UPVAL:
+		{
+			close_upvalues(vm.stack_top - 1);
+			vm_stack_pop();
+			break;
 		}
 	}
+}
 
 #undef READ_BYTE
 #undef READ_BYTES
 #undef READ_SHORT
 #undef READ_CONST
+#undef READ_CONST_LONG
 #undef READ_CONST_AT
+#undef BINARY_OP
 }
 InterpretResult vm_interpret(Chunk * chunk)
 {
@@ -354,32 +519,16 @@ InterpretResult vm_interpret(Chunk * chunk)
 
 InterpretResult interpret(const char * source)
 {
-	Chunk chunk;
-	chunk_init(&chunk);
+	ClosureObj * closure = compile(source);
 
-	/* Compile the source code and put the output in @chunk */
-	if (!compile(source, &chunk))
-	{
-		chunk_free(&chunk);
+	if (closure == NULL)
 		return INTERPRET_COMPILE_ERROR;
-	}
 
-	vm.chunk = &chunk;
-	vm.pc = chunk.bytecodes;
+	vm_stack_push(OBJ_VAL(*closure));
 
-#ifdef BYTECODE_DUMP
-	chunk_bytecode_dump(&chunk, "Dump bytecodes");
-#endif
+	// push the top-level code to the frame stack
+	call(closure, 0);
 
-#ifdef DBG_DISASSEMBLE
-	/* Print the instruction to be executed */
-	disassemble_chunk(&chunk, "Disassemble chunk");
-#endif
-
-
-	InterpretResult result = run();
-
-	chunk_free(&chunk);
-	return result;
+	return run();
 }
 

@@ -1,5 +1,6 @@
 #include "chunk.h"
 #include "memory.h"
+#include "object.h"
 #include <stdint.h>
 
 //Expand the chunk's bytecode array so that it can contain more n bytes
@@ -112,9 +113,16 @@ void chunk_write_load_const(Chunk * chunk, Value value, uint16_t line)
 	uint32_t const_offset = 0;
 	const_offset = chunk_add_const(chunk, value);
 
+	Opcode load_const, load_const_long;
+
+	if (IS_CLOSURE_OBJ(value))
+		load_const = OP_CLOSURE, load_const_long = OP_CLOSURE_LONG;
+	else
+		load_const = OP_CONST, load_const_long = OP_CONST_LONG;
+
 	// add instruction's opcode
 	chunk_append(chunk,
-		(const_offset <= UINT8_MAX) ? OP_CONST : OP_CONST_LONG, line);
+		(const_offset <= UINT8_MAX) ? load_const : load_const_long, line);
 
 	// parameter of OP_CONST_LONG takes up 3 bytes
 	chunk_append_bytes(chunk, &const_offset,

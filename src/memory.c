@@ -25,12 +25,37 @@ void free_string_obj(StringObj * obj)
 	FREE(StringObj, obj);
 }
 
+void free_function_obj(FunctionObj * obj)
+{
+	chunk_free(&obj->chunk);
+	FREE(FunctionObj, obj);
+}
+
+void free_closure_obj(ClosureObj * obj)
+{
+	FREE(ClosureObj, obj);
+}
+
+void free_upvalue_obj(UpvalueObj * obj)
+{
+	FREE(UpvalueObj, obj);
+}
+
 void free_object(Obj * object)
 {
 	switch (object->type)
 	{
 		case OBJ_STRING:
 			free_string_obj(object);
+			break;
+		case OBJ_FUNCTION:
+			free_function_obj((FunctionObj *) object);
+			break;
+		case OBJ_CLOSURE:
+			free_closure_obj((ClosureObj *) object);
+			break;
+		case OBJ_UPVALUE:
+			free_upvalue_obj((UpvalueObj *) object);
 			break;
 	}
 }

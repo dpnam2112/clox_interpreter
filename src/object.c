@@ -103,3 +103,31 @@ StringObj * StringObj_construct(const char * chars, size_t length)
 
 	return str_obj;
 }
+
+FunctionObj * FunctionObj_construct()
+{
+	FunctionObj * function = OBJ_ALLOC(FunctionObj, OBJ_FUNCTION);
+	function->arity = 0;
+	function->upval_count = 0;
+	chunk_init(&function->chunk);
+	function->name = NULL;
+	return function;
+}
+
+ClosureObj * ClosureObj_construct(FunctionObj * function) {
+	ClosureObj * closure = OBJ_ALLOC(ClosureObj, OBJ_CLOSURE);
+	closure->function = function;
+	closure->upvalues = (function->upval_count) ? ALLOCATE(UpvalueObj *, sizeof(UpvalueObj *) * function->upval_count) : NULL;
+	for (int i = 0; i < function->upval_count; i++) {
+		closure->upvalues[i] = NULL;
+	}
+	closure->upval_count = function->upval_count;
+	return closure;
+}
+
+UpvalueObj * UpvalueObj_construct(Value * value) {
+	UpvalueObj * upvalue = OBJ_ALLOC(UpvalueObj, OBJ_UPVALUE);
+	upvalue->value = value;
+	upvalue->next = NULL;
+	return upvalue;
+}

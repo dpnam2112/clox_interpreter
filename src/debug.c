@@ -1,5 +1,6 @@
 #include "debug.h"
 #include "chunk.h"
+#include "object.h"
 
 uint16_t current_line;
 bool line_change;
@@ -25,16 +26,16 @@ int simple_instruction(const char * name, int offset)
 	return offset + 1;
 }
 
-/* const_instruction: print the instruction and return the offset of the
- * next instruction. */
 int const_instruction(const char * name, Chunk * chunk, int offset)
 {
 	// offset of the constant value in chunk->values
+	Opcode opcode = chunk->bytecodes[offset];
 	uint8_t const_offset = chunk->bytecodes[offset + 1];
 	printf("%-16s %4d '", name, const_offset);
 
 	Value const_value = chunk->constants.values[const_offset];
 	print_value(const_value);
+
 
 	printf("'\n");
 	return offset + 2;
@@ -46,10 +47,20 @@ int const_long_instruction(const char * name, Chunk * chunk, int offset)
 	uint32_t const_offset = 0;
 	memcpy(&const_offset, &(chunk->bytecodes[offset + 1]), 3);
 	printf("%-16s %4d '", name, const_offset);
-
+	
 	Value const_value = chunk->constants.values[const_offset];
 	print_value(const_value);
 
+	printf("'\n");
+	return offset + 4;
+}
+
+int upval_instruction(const char * name, Chunk * chunk, int offset)
+{
+	Opcode opcode = chunk->bytecodes[offset];
+	uint32_t upval_offset = 0;
+	memcpy(&upval_offset, &(chunk->bytecodes[offset + 1]), 3);
+	printf("%-16s %4d '", name, upval_offset);
 	printf("'\n");
 	return offset + 4;
 }
@@ -150,18 +161,49 @@ int disassemble_inst(Chunk *chunk, int offset)
 			return const_long_instruction("OP_GET_LOCAL", chunk, offset);
 		case OP_SET_LOCAL:
 			return const_long_instruction("OP_SET_LOCAL", chunk, offset);
+		case OP_GET_UPVAL:
+			return upval_instruction("OP_GET_UPVAL", chunk, offset);
+		case OP_SET_UPVAL:
+			return upval_instruction("OP_SET_UPVAL", chunk, offset);
 		case OP_JMP:
 			return jump_instruction("OP_JMP", chunk, offset);
 		case OP_JMP_IF_FALSE:
 			return jump_instruction("OP_JMP_IF_FALSE", chunk, offset);
 		case OP_LOOP:
 			return loop_instruction("OP_LOOP", chunk, offset);
+		case OP_CALL:
+			return const_instruction("OP_CALL", chunk, offset);
+		case OP_CLOSURE:
+		{
+			offset++;
+			uint8_t constant_offset = chunk->bytecodes[offset++];
+			printf("%-16s %4d ", "OP_CLOSURE", constant_offset);
+			print_value(chunk->constants.values[constant_offset]);
+			printf("\n");
+		
+			ClosureObj * closure = AS_CLOSURE(chunk->constants.values[constant_offset]);
+			for (int i = 0; i < closure->function->upval_count; i++)
+			{
+				bool local = chunk->bytecodes[offset++];
+				uint32_t upval_index = 0;
+				memcpy(&upval_index, &chunk->bytecodes[offset], 3);
+				offset += 3;
+				printf("%04d   |                     %s %d\n", offset - 2, local ? "local" : "upvalue", upval_index);
+			}
+
+			return offset;
+		}
+		case OP_CLOSURE_LONG:
+			return const_long_instruction("OP_CLOSURE_LONG", chunk, offset);
+		case OP_CLOSE_UPVAL:
+			return simple_instruction("OP_CLOSE_UPVAL", offset);
 		case OP_EXIT:
 			return simple_instruction("OP_EXIT", offset);
 		default:
 			printf("Unknown opcode\n");
 			return offset + 1;
 	}
+
 	return offset;
 }
 

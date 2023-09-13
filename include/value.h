@@ -58,5 +58,6 @@ void value_arr_init(ValueArr * vl_arr);
 void value_arr_free(ValueArr * vl_arr);
 void value_arr_append(ValueArr * vl_arr, Value val);
 void print_value(Value val);
+bool callable(Value val);
 
 #endif

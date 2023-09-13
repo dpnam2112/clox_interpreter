@@ -66,5 +66,35 @@ void print_object(Value val)
 		case OBJ_STRING:
 			printf ("%s", AS_CSTRING(val));
 			break;
+		case OBJ_FUNCTION:
+		{
+			FunctionObj * func = AS_FUNCTION(val);
+			if (strcmp(func->name->chars, "") == 0)
+				printf ("<fn %s>", func->name->chars);
+			else
+				printf("<script>");
+			break;
+		}
+		case OBJ_UPVALUE:
+			printf("<upvalue>");
+			break;
+		case OBJ_NONE:
+			printf("not an object");
+			break;
 	}
+}
+
+bool callable(Value val)
+{
+	if (val.type != VAL_OBJ)
+		return false;
+
+	switch (OBJ_TYPE(val))
+	{
+		case OBJ_FUNCTION:
+		case OBJ_CLOSURE:
+			return true;
+	}
+
+	return false;
 }
