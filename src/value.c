@@ -78,6 +78,9 @@ void print_object(Value val)
 		case OBJ_UPVALUE:
 			printf("<upvalue>");
 			break;
+		case OBJ_NATIVE_FN:
+			printf("<native function>");
+			break;
 		case OBJ_NONE:
 			printf("not an object");
 			break;
@@ -93,6 +96,7 @@ bool callable(Value val)
 	{
 		case OBJ_FUNCTION:
 		case OBJ_CLOSURE:
+		case OBJ_NATIVE_FN:
 			return true;
 	}
 

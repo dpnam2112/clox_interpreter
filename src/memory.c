@@ -41,6 +41,11 @@ void free_upvalue_obj(UpvalueObj * obj)
 	FREE(UpvalueObj, obj);
 }
 
+void free_native_fn_obj(NativeFnObj * obj)
+{
+	FREE(NativeFnObj, obj);
+}
+
 void free_object(Obj * object)
 {
 	switch (object->type)
@@ -56,6 +61,9 @@ void free_object(Obj * object)
 			break;
 		case OBJ_UPVALUE:
 			free_upvalue_obj((UpvalueObj *) object);
+			break;
+		case OBJ_NATIVE_FN:
+			free_native_fn_obj((NativeFnObj *) object);
 			break;
 	}
 }

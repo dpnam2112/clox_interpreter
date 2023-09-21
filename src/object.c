@@ -131,3 +131,10 @@ UpvalueObj * UpvalueObj_construct(Value * value) {
 	upvalue->next = NULL;
 	return upvalue;
 }
+
+NativeFnObj * NativeFnObj_construct(NativeFn func)
+{
+	NativeFnObj * new_native = OBJ_ALLOC(NativeFnObj, OBJ_NATIVE_FN);
+	new_native->function = func;
+	return new_native;
+}

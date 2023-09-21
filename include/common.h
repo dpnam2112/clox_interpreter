@@ -12,6 +12,4 @@
 #define DBG_DISASSEMBLE
 #define BYTECODE_DUMP
 
-#define SET_BIT(x, n) (1 << n) | x
-
 #endif

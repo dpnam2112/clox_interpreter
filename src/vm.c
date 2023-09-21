@@ -6,31 +6,13 @@
 #include "object.h"
 #include "table.h"
 #include <stdarg.h>
+#include <time.h>
 
 VM vm;
 
 static void stack_reset()
 {
 	vm.stack_top = vm.stack;
-}
-
-void vm_init(bool repl)
-{
-	stack_reset();
-	table_init(&vm.strings);
-	table_init(&vm.globals);
-	vm.open_upvalues = NULL;
-	vm.objects = NULL;
-	vm.frame_count = 0;
-	vm.repl = repl;
-}
-
-void vm_free()
-{
-	table_free(&vm.strings);
-	table_free(&vm.globals);
-	free_objects();
-	stack_reset();
 }
 
 void vm_stack_push(Value value)
@@ -59,6 +41,42 @@ static Value vm_stack_peek(int distance)
 {
 	return vm.stack_top[-1 - distance];	// ??
 }
+
+static Value clock_native(int param_count, Value * params)
+{
+	return NUMBER_VAL((double) clock() / CLOCKS_PER_SEC);
+}
+
+static void define_native_fn(const char * name, NativeFn func)
+{
+	vm_stack_push(OBJ_VAL(*StringObj_construct(name, strlen(name))));
+	vm_stack_push(OBJ_VAL(*NativeFnObj_construct(func)));
+	table_set(&vm.globals, AS_STRING(vm_stack_peek(1)), vm_stack_peek(0));
+	vm_stack_pop();
+	vm_stack_pop();
+}
+
+void vm_init(bool repl)
+{
+	stack_reset();
+	table_init(&vm.strings);
+	table_init(&vm.globals);
+	vm.open_upvalues = NULL;
+	vm.objects = NULL;
+	vm.frame_count = 0;
+	vm.repl = repl;
+
+	define_native_fn("clock", clock_native);
+}
+
+void vm_free()
+{
+	table_free(&vm.strings);
+	table_free(&vm.globals);
+	free_objects();
+	stack_reset();
+}
+
 
 static bool is_falsey(Value val)
 {
@@ -225,7 +243,7 @@ static InterpretResult run()
 #define READ_SHORT() (frame->pc += 2, *((uint16_t *) (frame->pc - 2)))
 #define READ_BYTES(n) read_bytes(&(frame->pc), n)
 #define READ_CONST() frame->closure->function->chunk.constants.values[READ_BYTE()]
-#define READ_CONST_LONG() frame->closure->function->chunk.constants.values[READ_BYTES(3)]
+#define READ_CONST_LONG() frame->closure->function->chunk.constants.values[READ_BYTES(LONG_CONST_OFFSET_SIZE)]
 #define READ_CONST_AT(offset) frame->closure->function->chunk.constants.values[offset]
 #define BINARY_OP(value_type, op)\
 do {\
@@ -377,16 +395,18 @@ do {\
 			vm_stack_pop();
 			break;
 		case OP_DEFINE_GLOBAL:
+		case OP_DEFINE_GLOBAL_LONG:
 		{
-			uint32_t iden_offset = READ_BYTES(3);
+			uint32_t iden_offset = (inst == OP_DEFINE_GLOBAL) ? READ_BYTE() : READ_BYTES(LONG_CONST_OFFSET_SIZE);
 			StringObj * identifier = AS_OBJ(READ_CONST_AT(iden_offset));
 			table_set(&vm.globals, identifier, vm_stack_peek(0));
 			vm_stack_pop();
 			break;
 		}
 		case OP_GET_GLOBAL:
+		case OP_GET_GLOBAL_LONG:
 		{
-			uint32_t offset = READ_BYTES(3);
+			uint32_t offset = (inst == OP_GET_GLOBAL) ? READ_BYTE() : READ_BYTES(LONG_CONST_OFFSET_SIZE);
 			StringObj * identifier = AS_OBJ(READ_CONST_AT(offset));
 			Value value;
 			if (!table_get(&vm.globals, identifier, &value))
@@ -401,8 +421,9 @@ do {\
 			break;
 		}
 		case OP_SET_GLOBAL:
+		case OP_SET_GLOBAL_LONG:
 		{
-			uint32_t offset = READ_BYTES(3);
+			uint32_t offset = (inst == OP_SET_GLOBAL) ? READ_BYTE() : READ_BYTES(LONG_CONST_OFFSET_SIZE);
 			StringObj * identifier = AS_OBJ(READ_CONST_AT(offset));
 			if (table_set(&vm.globals, identifier, vm_stack_peek(0)))
 			{
@@ -413,14 +434,16 @@ do {\
 			break;
 		}
 		case OP_GET_LOCAL:
+		case OP_GET_LOCAL_LONG:
 		{
-			uint32_t slot = READ_BYTES(3);
+			uint32_t slot = (inst == OP_GET_LOCAL) ? READ_BYTE() : READ_BYTES(LONG_LOCAL_OFFSET_SIZE);
 			vm_stack_push(frame->slots[slot]);
 			break;
 		}
 		case OP_SET_LOCAL:
+		case OP_SET_LOCAL_LONG:
 		{
-			uint32_t slot = READ_BYTES(3);
+			uint32_t slot = (inst == OP_SET_LOCAL) ? READ_BYTE() : READ_BYTES(LONG_LOCAL_OFFSET_SIZE);
 			frame->slots[slot] = vm_stack_peek(0);
 			break;
 		}
@@ -447,6 +470,16 @@ do {\
 		{
 			uint8_t param_count = READ_BYTE();
 			Value called_obj = vm_stack_peek(param_count);
+
+			if (IS_NATIVE_FN_OBJ(called_obj))
+			{
+				NativeFn nav_fn = AS_NATIVE_FN(called_obj);
+				Value res = nav_fn(param_count, vm.stack_top - param_count);
+				vm.stack_top -= param_count + 1;
+				vm_stack_push(res);
+				break;
+			}
+			
 			if (!callable(called_obj))
 			{
 				runtime_error("object is not callable.");
@@ -467,8 +500,12 @@ do {\
 
 			for (int i = 0; i < closure->function->upval_count; i++)
 			{
-				bool local = READ_BYTE();
-				uint32_t upvalue_pos = READ_BYTES(3);
+				uint8_t upval_info = READ_BYTE();
+
+				bool local = upval_info & 1;						// Extract the first bit (LSB)
+				bool long_offset = (upval_info & (1 << 1)) >> 1;	// Extract the second bit
+
+				uint32_t upvalue_pos = (long_offset) ? READ_BYTES(2) : READ_BYTE();
 
 				if (local) {
 					closure->upvalues[i] = capture_upval(frame->slots + upvalue_pos);
@@ -480,15 +517,17 @@ do {\
 			break;
 		}
 		case OP_GET_UPVAL:
+		case OP_GET_UPVAL_LONG:
 		{
-			uint32_t upval_index = READ_BYTES(3);
+			uint32_t upval_index = (inst == OP_GET_UPVAL) ? READ_BYTE() : READ_BYTES(LONG_UPVAL_OFFSET_SIZE);
 			UpvalueObj * upvalue = frame->closure->upvalues[upval_index];
 			vm_stack_push(*(upvalue->value));
 			break;
 		}
 		case OP_SET_UPVAL:
+		case OP_SET_UPVAL_LONG:
 		{
-			uint32_t upval_index = READ_BYTES(3);
+			uint32_t upval_index = (inst == OP_SET_UPVAL) ? READ_BYTE() : READ_BYTES(LONG_UPVAL_OFFSET_SIZE);
 			UpvalueObj * upvalue = frame->closure->upvalues[upval_index];
 			*(upvalue->value) = vm_stack_peek(0);
 			break;

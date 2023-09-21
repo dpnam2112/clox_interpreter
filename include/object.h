@@ -18,6 +18,7 @@ typedef enum
 	OBJ_FUNCTION,
 	OBJ_CLOSURE,
 	OBJ_UPVALUE,
+	OBJ_NATIVE_FN,
 } ObjType;
 
 struct Obj
@@ -60,18 +61,28 @@ typedef struct ClosureObj
 	int upval_capacity;
 } ClosureObj;
 
+typedef Value (*NativeFn) (int arg_count, Value * args);
+typedef struct
+{
+	Obj obj;
+	NativeFn function;
+}
+NativeFnObj;
+
 #define OBJ_TYPE(obj) ((obj.type == VAL_OBJ) ? AS_OBJ(obj)->type : OBJ_NONE)
 
 #define IS_STRING_OBJ(value) (is_obj_type(value, OBJ_STRING))
 #define IS_FUNCTION_OBJ(value) (is_obj_type(value, OBJ_FUNCTION))
 #define IS_CLOSURE_OBJ(value) (is_obj_type(value, OBJ_CLOSURE))
 #define IS_UPVALUE_OBJ(value) (is_obj_type(value, OBJ_UPVALUE))
+#define IS_NATIVE_FN_OBJ(value) (is_obj_type(value, OBJ_NATIVE_FN))
 
 #define AS_STRING(value) ((StringObj*) AS_OBJ(value))
 #define AS_CSTRING(value) (AS_STRING(value)->chars)
 #define AS_FUNCTION(value) ((FunctionObj *) AS_OBJ(value))
 #define AS_CLOSURE(value) ((ClosureObj *) AS_OBJ(value))
 #define AS_UPVALUE(value) ((UpvalueObj *) AS_OBJ(value))
+#define AS_NATIVE_FN(value) (((NativeFnObj *) AS_OBJ(value))->function)
 
 static inline bool is_obj_type(Value value, ObjType type)
 {
@@ -84,6 +95,7 @@ StringObj * StringObj_construct(const char * chars, size_t length);
 FunctionObj * FunctionObj_construct();
 ClosureObj * ClosureObj_construct();
 UpvalueObj * UpvalueObj_construct();
+NativeFnObj * NativeFnObj_construct(NativeFn func);
 
 /* print_object: print the string representation of an object */
 void print_object(Value);

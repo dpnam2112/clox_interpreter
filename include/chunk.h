@@ -7,6 +7,15 @@
 
 #define INIT_SIZE 8
 
+/** Some instructions take an offset of an object or something as a parameter.
+ *  e.g: OP_CONST, OP_CONST_LONG, OP_GET_VAL, OP_GET_VAL_LONG,...
+ *  The following constants define the size of the parameters of *_LONG instructions.
+ */
+
+#define LONG_LOCAL_OFFSET_SIZE 3
+#define LONG_UPVAL_OFFSET_SIZE 2
+#define LONG_CONST_OFFSET_SIZE 3
+
 typedef enum
 {
 	OP_CONST,
@@ -20,10 +29,15 @@ typedef enum
 	OP_PRINT,
 	OP_POP,
 	OP_DEFINE_GLOBAL,
+	OP_DEFINE_GLOBAL_LONG,
 	OP_GET_GLOBAL,
+	OP_GET_GLOBAL_LONG,
 	OP_SET_GLOBAL,
+	OP_SET_GLOBAL_LONG,
 	OP_GET_UPVAL,
+	OP_GET_UPVAL_LONG,
 	OP_SET_UPVAL,
+	OP_SET_UPVAL_LONG,
 	OP_TRUE,
 	OP_FALSE,
 	OP_NIL,
@@ -35,7 +49,9 @@ typedef enum
 	OP_MUL,
 	OP_DIV,
 	OP_GET_LOCAL,
+	OP_GET_LOCAL_LONG,
 	OP_SET_LOCAL,
+	OP_SET_LOCAL_LONG,
 	OP_JMP_IF_FALSE,
 	OP_JMP,
 	OP_LOOP,

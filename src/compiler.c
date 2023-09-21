@@ -44,16 +44,18 @@ typedef enum FunctionType
 	TYPE_SCRIPT,
 } FunctionType;
 
-// This struct is used to resolve variables that lie outside
-// of the current function's scope.
-//
-// Explain the meaning of each field:
-// @index: index of the variable in the enclosing function's stack array
-// @local: 
+/** Upvalue: used to resolve variables that lie outside
+ * of the current function's scope.
+ *
+ * @index: index of the variable in the enclosing function's stack array
+ * @local: indicate whether the upvalue refer to an object belonging to the enclosing closure/function
+ * @long_offset: indicate whether the @index is one-byte long (i.e, 0 <= @index <= UINT8_MAX).
+ */
 typedef struct Upvalue
 {
 	uint32_t index;
 	bool local;
+	bool long_offset;
 }
 Upvalue;
 
@@ -152,7 +154,7 @@ static uint32_t add_upvalue(Compiler * compiler, int index, bool local)
 {
 	int upval_count = compiler->upval_count;
 
-	if (upval_count > 1 << 3 * sizeof(uint8_t))
+	if (upval_count > 1 << 2 * sizeof(uint8_t))
 	{
 		error(&parser.prev, "[Memory error] Too many upvalues.");
 		return upval_count;
@@ -164,7 +166,8 @@ static uint32_t add_upvalue(Compiler * compiler, int index, bool local)
 			return i;
 	}
 
-	compiler->upvalues[compiler->upval_count] = (Upvalue) { index, local };
+	bool long_offset = (compiler->upval_count > UINT8_MAX);
+	compiler->upvalues[compiler->upval_count] = (Upvalue) { index, local, long_offset };
 	return compiler->upval_count++;
 }
 
@@ -570,14 +573,20 @@ static void assignment()
 	parse_precedence(PREC_ASSIGNMENT);
 
 	uint32_t stack_index = resolve_local(current, &name);
-	uint32_t upvalue_index;
+	uint32_t upvalue_index = 0;
 
-	if (stack_index != -1)
-		emit_param_inst(OP_SET_LOCAL, stack_index, 3);
-	else if ((upvalue_index = resolve_upvalue(current, &name)) != -1)
-		emit_param_inst(OP_SET_UPVAL, upvalue_index, 3);
+	if (stack_index != -1 && stack_index <= UINT8_MAX)
+		emit_param_inst(OP_SET_LOCAL, stack_index, 1);
+	else if (stack_index != -1)
+		emit_param_inst(OP_SET_LOCAL_LONG, stack_index, LONG_LOCAL_OFFSET_SIZE);
+	else if ((upvalue_index = resolve_upvalue(current, &name)) != -1 && upvalue_index <= UINT8_MAX)
+		emit_param_inst(OP_SET_UPVAL, upvalue_index, 1);
+	else if (upvalue_index != -1)
+		emit_param_inst(OP_SET_UPVAL_LONG, upvalue_index, LONG_UPVAL_OFFSET_SIZE);
+	else if (iden_offset <= UINT8_MAX)
+		emit_param_inst(OP_SET_GLOBAL, iden_offset, 1);
 	else
-		emit_param_inst(OP_SET_GLOBAL, iden_offset, 3);
+		emit_param_inst(OP_SET_GLOBAL_LONG, iden_offset, LONG_CONST_OFFSET_SIZE);
 }
 
 static void variable()
@@ -592,12 +601,18 @@ static void variable()
 
 	uint32_t stack_index = resolve_local(current, &parser.prev);
 	uint32_t upvalue_index;
-	if (stack_index != -1)
-		emit_param_inst(OP_GET_LOCAL, stack_index, 3);
-	else if ((upvalue_index = resolve_upvalue(current, &parser.prev)) != -1)
-		emit_param_inst(OP_GET_UPVAL, upvalue_index, 3);
+	if (stack_index != -1 && stack_index <= UINT8_MAX)
+		emit_param_inst(OP_GET_LOCAL, stack_index, 1);
+	else if (stack_index != -1)
+		emit_param_inst(OP_GET_LOCAL_LONG, stack_index, LONG_LOCAL_OFFSET_SIZE);
+	else if ((upvalue_index = resolve_upvalue(current, &parser.prev)) != -1 && upvalue_index <= UINT8_MAX)
+		emit_param_inst(OP_GET_UPVAL, upvalue_index, 1);
+	else if (upvalue_index != -1)
+		emit_param_inst(OP_GET_UPVAL_LONG, upvalue_index, LONG_UPVAL_OFFSET_SIZE);
+	else if (offset <= UINT8_MAX)
+		emit_param_inst(OP_GET_GLOBAL, offset, 1);
 	else
-		emit_param_inst(OP_GET_GLOBAL, offset, 3);
+		emit_param_inst(OP_GET_GLOBAL, offset, LONG_CONST_OFFSET_SIZE);
 }
 
 static void declaration()
@@ -771,10 +786,12 @@ static void function(FunctionType type)
 	ClosureObj * closure = end_compiler();
 	closure->function->arity = param_count;
 	emit_const_inst(OBJ_VAL(*closure));
+
 	for (int i = 0; i < compiler.upval_count; i++)
 	{
-		emit_byte(compiler.upvalues[i].local);
-		emit_bytes(&(compiler.upvalues[i].index), 3);
+		Upvalue upvalue = compiler.upvalues[i];
+		emit_byte(upvalue.local | (upvalue.long_offset << 1));
+		emit_bytes(&(upvalue.index), (upvalue.long_offset) ? 2 : 1);
 	}
 }
 
@@ -812,7 +829,10 @@ static void define_variable(uint32_t offset)
 {
 	if (current->scope_depth > 0)
 		return;
-	emit_param_inst(OP_DEFINE_GLOBAL, offset, 3);
+	if (offset <= UINT8_MAX)
+		emit_param_inst(OP_DEFINE_GLOBAL, offset, 1);
+	else
+		emit_param_inst(OP_DEFINE_GLOBAL_LONG, offset, 3);
 }
 
 /* parse_identifier: parse the identifier. If the current token is
