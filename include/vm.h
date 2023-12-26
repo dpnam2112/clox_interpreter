@@ -8,7 +8,7 @@
 #include "table.h"
 #include "object.h"
 
-#define STACK_MAX 			256
+#define STACK_MAX 		256
 #define CALL_FRAME_MAX		64 
 
 typedef struct
@@ -19,6 +19,7 @@ typedef struct
 } CallFrame;
 
 /** VM: object that belongs to this struct represent the virtual machine
+ *
  * @frame: stack of frames that are called and are not terminate yet
  * @chunk: Contain the bytecodes and temporary constants
  * @pc: program counter, points to the next instruction that will be executed
@@ -43,14 +44,22 @@ typedef struct
 	// the value they references to.
 	// This means that the first upvalue of the list (the head) always 
 	// references to the outermost upvalue inside the stack.
-	// When the program counter escape a scope, if there is any variables used by a outside function,
-	// those variable need to be moved to the heap.
+	// When the program counter escapes a scope, if there is any variables used by a outside function,
+	// those variables need to be moved to the heap.
 	// We use this linked list to track which upvalues need to be moved to the heap.
 	UpvalueObj * open_upvalues;
 
 	Table strings;	// used for string-interning technique
 	Table globals; 	// global variables
 	bool repl;
+
+	// Used by garbage collector for mark-sweep garbage collecting algorithm
+	// Contains all reachable heap objects that is marked, but is not discovered all of their children  
+	struct {
+		Obj ** objects;
+		uint32_t count;
+		uint32_t capacity;
+	} gc_frontier;
 } VM;
 
 typedef enum
@@ -68,5 +77,8 @@ InterpretResult vm_interpret(Chunk * chunk);
 void vm_stack_push(Value value);
 Value vm_stack_pop();
 int vm_stack_size();
+bool gc_frontier_empty();
+Obj * gc_frontier_pop();
+void gc_frontier_push(Obj *);
 
 #endif

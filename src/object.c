@@ -9,10 +9,15 @@ void * allocate_object(size_t size, ObjType type)
 {
 	Obj * obj_ref = reallocate(NULL, 0, size);
 	obj_ref->type = type;
+	obj_ref->gc_marked = false;
 
 	/* add the new object to virtual machine's object pool */
 	obj_ref->next = vm.objects;
 	vm.objects = obj_ref;
+
+#ifdef DEBUG_LOG_GC
+	printf("%p allocate %zu for %d\n", (void *) obj_ref, size, type);
+#endif
 
 	return obj_ref;
 }

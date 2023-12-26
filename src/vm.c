@@ -66,8 +66,14 @@ void vm_init(bool repl)
 	vm.frame_count = 0;
 	vm.repl = repl;
 
+	vm.gc_frontier.objects = NULL;
+	vm.gc_frontier.count = 0;
+	vm.gc_frontier.capacity = 0;
+	
+
 	define_native_fn("clock", clock_native);
 }
+
 
 void vm_free()
 {
@@ -77,6 +83,29 @@ void vm_free()
 	stack_reset();
 }
 
+bool gc_frontier_empty()
+{
+	return vm.gc_frontier.count == 0;
+}
+
+void gc_frontier_push(Obj * obj)
+{
+	if (vm.gc_frontier.count == vm.gc_frontier.capacity)
+	{
+		int new_cap = GROW_CAPACITY(vm.gc_frontier.capacity);
+		vm.gc_frontier.objects = GROW_ARRAY(Obj*, vm.gc_frontier.objects,
+			vm.gc_frontier.capacity, new_cap);
+		vm.gc_frontier.capacity = new_cap;
+	}
+
+	vm.gc_frontier.objects[vm.gc_frontier.count++] = obj;
+}
+
+Obj * gc_frontier_pop()
+{
+	if (vm.gc_frontier.count == 0) return NULL;
+	return vm.gc_frontier.objects[--vm.gc_frontier.count];
+}
 
 static bool is_falsey(Value val)
 {
@@ -219,6 +248,7 @@ static UpvalueObj * capture_upval(Value * value) {
  * 
  * NOTE: All upvalues in the virtual machine's list of upvalues is sorted by comparing
  * Upvalue.value, which is a pointer pointing to a value inside the stack.
+ * 
  * When an upvalue is closed, we clone the value to which the upvalue reference
  * and put the new value inside the upvalue object.
  */

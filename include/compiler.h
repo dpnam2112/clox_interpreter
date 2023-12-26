@@ -25,5 +25,6 @@ typedef enum
 Precedence;
 
 ClosureObj * compile(const char * source);
+bool mark_compiler_roots();
 
 #endif

@@ -87,6 +87,18 @@ Parser parser;
 Chunk *compiling_chunk;
 Compiler * current = NULL;
 
+bool mark_compiler_roots()
+{
+	Compiler * compiler_it = current;
+	while (compiler_it != NULL)
+	{
+		mark_object(compiler_it->function);
+		compiler_it = compiler_it->enclosing;
+	}
+
+	return true;
+}
+
 static void int_arr_init(IntArr *arr)
 {
 	arr->head = ALLOCATE(int, 10);
@@ -323,7 +335,7 @@ static void synchronize()
 		case TK_CONTINUE:
 		case TK_RETURN:
 			break;
-		default:
+		default:;
 		}
 
 		advance();

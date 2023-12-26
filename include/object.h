@@ -25,6 +25,9 @@ struct Obj
 {
 	ObjType type;
 	Obj * next;
+
+	// Used by garbage collector to indicate whether the object is marked
+	bool gc_marked;
 };
 
 struct StringObj
@@ -49,6 +52,8 @@ typedef struct UpvalueObj
 	Obj obj;
 	Value * value;
 	Value cloned;
+
+	// Used by virtual machine to manage opening upvalues
 	struct UpvalueObj * next;
 } UpvalueObj;
 

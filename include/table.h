@@ -37,4 +37,6 @@ bool table_get(Table * table, StringObj * key, Value * dest);
  * return true if the deletion is successful */
 bool table_delete(Table * table, StringObj * key, Value * dest);
 
+void table_remove_unmarked_object(Table * table);
+
 #endif

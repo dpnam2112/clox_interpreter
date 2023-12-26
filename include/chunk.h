@@ -70,7 +70,6 @@ typedef struct
 	uint32_t capacity;
 	ValueArr constants;	// constant values
 	uint16_t current_line;	// current line number
-
 } Chunk;
 
 void chunk_init(Chunk * chunk);

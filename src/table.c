@@ -101,3 +101,15 @@ bool table_delete(Table * table, StringObj * key, Value * dest)
 	table->count--;
 	return true;
 }
+
+void table_remove_unmarked_object(Table * table)
+{
+	for (int i = 0; i < table->capacity; i++)
+	{
+		Entry * entry = &table->entries[i];
+		if (entry->key && !entry->key->obj.gc_marked)
+		{
+			table_delete(table, entry->key, NULL);
+		}
+	}
+}

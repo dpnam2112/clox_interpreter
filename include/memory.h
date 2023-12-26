@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include <stdlib.h>
+#include "value.h"
 
 #define GROW_ARRAY(type, ptr, old_sz, new_sz) \
 	(type *) reallocate(ptr, sizeof(type) * old_sz, sizeof(type) * new_sz)
@@ -28,6 +29,8 @@
  * */
 void * reallocate(void * arr, size_t old_sz, size_t new_sz);
 void * append_array(void * ptr, size_t item_sz, int arr_size, int arr_capacity, void * item);
+void collect_garbage();
 void free_objects();
+bool mark_object(Obj * obj);
 
 #endif

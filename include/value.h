@@ -2,7 +2,6 @@
 #define VALUE_H
 
 #include "common.h"
-#include "memory.h"
 
 #define CONST_POOL_LIMIT  0x01000000 //2^24
 
