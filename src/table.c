@@ -24,9 +24,8 @@ void table_free(Table * table)
 static Entry * find_entry(Entry * entries, uint32_t capacity, StringObj * key)
 {
 	Entry * tombstone = NULL;
-	uint32_t i;
-	for (i = key->hashcode % capacity; true; i = (i + 1) % capacity)
-	{
+	uint32_t start = key->hashcode % capacity, i = start, end_loop = false;
+	while (!end_loop) {
 		if (entries[i].key == NULL)
 		{
 			if (!entries[i].deleted)
@@ -36,9 +35,11 @@ static Entry * find_entry(Entry * entries, uint32_t capacity, StringObj * key)
 		}
 		else if (entries[i].key == key)
 			return &entries[i];
+		i = (i + 1) % capacity;
+		if (i == start) end_loop = true;
 	}
 
-	return &entries[i];
+	return tombstone;
 }
 
 static void table_expand(Table * table)
@@ -97,7 +98,7 @@ bool table_delete(Table * table, StringObj * key, Value * dest)
 		*dest = target->value;
 	target->deleted = true;
 	target->key = NULL;
-	table->count--;
+//  table->count--;
 	return true;
 }
 
@@ -106,7 +107,7 @@ void table_remove_unmarked_object(Table * table)
 	for (int i = 0; i < table->capacity; i++)
 	{
 		Entry * entry = &table->entries[i];
-		if (entry->key && !entry->key->obj.gc_marked)
+		if (entry->key != NULL && !entry->key->obj.gc_marked)
 		{
 			table_delete(table, entry->key, NULL);
 		}

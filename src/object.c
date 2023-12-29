@@ -43,7 +43,7 @@ Entry * find_existing_string_entry(const char * chars, size_t length, uint32_t h
 	if (vm.strings.capacity == 0)
 		return NULL;
 	uint32_t start = hashcode % vm.strings.capacity;
-	Entry * entry;
+	Entry * entry = NULL;
 	for (uint32_t i = 0; i < vm.strings.capacity; i++)
 	{
 		uint32_t entry_idx = (start + i) % vm.strings.capacity;
@@ -63,7 +63,7 @@ Entry * find_existing_string_entry(const char * chars, size_t length, uint32_t h
 		}
 	}
 
-	return entry;
+	return NULL;
 }
 
 StringObj * StringObj_allocate(const char * chars, size_t length, uint32_t hashcode)
@@ -106,6 +106,7 @@ StringObj * StringObj_construct(const char * chars, size_t length)
 		entry->key = str_obj;
 		entry->value = NIL_VAL();
 		entry->deleted = false;
+		vm.strings.count++;
 	}
 
 	vm_stack_pop();

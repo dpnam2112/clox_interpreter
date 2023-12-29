@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include "value.h"
 
+#define GC_GROW_FACTOR 2
+
 #define GROW_ARRAY(type, ptr, old_sz, new_sz) \
 	(type *) reallocate(ptr, sizeof(type) * old_sz, sizeof(type) * new_sz)
 

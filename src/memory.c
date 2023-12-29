@@ -20,9 +20,15 @@ void dbg_print_object(Obj * obj) {
 void * reallocate(void * arr, size_t old_sz, size_t new_sz)
 {
 
+	vm.gc.allocated += (new_sz - old_sz);
+
 	if (new_sz > old_sz) {
 #ifdef DEBUG_STRESS_GC
 		collect_garbage();
+#else
+		if (vm.gc.allocated >= vm.gc.threshold) {
+			collect_garbage();
+		}
 #endif
 	}
 
