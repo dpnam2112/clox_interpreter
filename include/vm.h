@@ -40,26 +40,44 @@ typedef struct
 	Value * stack_top;
 	Obj * objects;
 
-	// All Upvalues in the list are sorted by the address of
-	// the value they references to.
-	// This means that the first upvalue of the list (the head) always 
-	// references to the outermost upvalue inside the stack.
-	// When the program counter escapes a scope, if there is any variables used by a outside function,
-	// those variables need to be moved to the heap.
-	// We use this linked list to track which upvalues need to be moved to the heap.
+	/**All Upvalues in the list are sorted by the address of
+	 * the value they references to.
+	 * This means that the first upvalue of the list (the head) always 
+	 * references to the outermost upvalue inside the stack.
+         * When the program counter escapes a scope, if there is any variables used by a outside function,
+	 * those variables need to be moved to the heap.
+ 	 * We use this linked list to track which upvalues need to be moved to the heap.
+	 * */ 
 	UpvalueObj * open_upvalues;
 
 	Table strings;	// used for string-interning technique
 	Table globals; 	// global variables
 	bool repl;
 
-	// Used by garbage collector for mark-sweep garbage collecting algorithm
-	// Contains all reachable heap objects that is marked, but is not discovered all of their children  
+
+	/** @gc stores the data used by the garbage collection algorithm.
+	 * The garbage collector is implemented using mark-sweep algorithm.
+	 *
+	 * The idea is to use a graph traversal algorithm (in this case, Breadth-first traversal)
+	 * to mark all reachable objects. After the graph traversal completes, we remove all 
+	 * unreachable objects from @vm.objects.
+	 *
+	 * @gc.objects: A dynamic array used to keep tracks of objects that are
+	 * reachable and are not marked.
+	 * @gc.count: Number of objects in @gc.objects
+	 * @gc.capacity: Maximum capacity of @gc.objects
+	 * 
+	 * Two fields @gc.allocated and @gc.threshold are used to determine when
+	 * to collect garbages. If @gc.allocated > @gc.threshold, the garbage collection
+	 * operation is performed.
+	 * */
 	struct {
 		Obj ** objects;
 		uint32_t count;
 		uint32_t capacity;
-	} gc_frontier;
+		size_t allocated;
+		size_t threshold;
+	} gc;
 } VM;
 
 typedef enum
@@ -73,12 +91,20 @@ extern VM vm;
 
 void vm_init(bool is_repl);
 void vm_free();
+
 InterpretResult vm_interpret(Chunk * chunk);
+
 void vm_stack_push(Value value);
 Value vm_stack_pop();
 int vm_stack_size();
-bool gc_frontier_empty();
-Obj * gc_frontier_pop();
-void gc_frontier_push(Obj *);
+
+/** gc_empty: check if the BFS array used by gc is empty.  */
+bool gc_empty();
+
+/** gc_pop: Remove an object from the BFS array used by gc. */
+Obj * gc_pop();
+
+/** gc_push: Add a new object to the BFS array. */
+void gc_push(Obj *);
 
 #endif

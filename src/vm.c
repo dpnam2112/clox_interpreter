@@ -6,6 +6,7 @@
 #include "object.h"
 #include "table.h"
 #include <stdarg.h>
+#include <stdlib.h>
 #include <time.h>
 
 VM vm;
@@ -61,15 +62,16 @@ void vm_init(bool repl)
 	stack_reset();
 	table_init(&vm.strings);
 	table_init(&vm.globals);
+
 	vm.open_upvalues = NULL;
 	vm.objects = NULL;
 	vm.frame_count = 0;
 	vm.repl = repl;
-
-	vm.gc_frontier.objects = NULL;
-	vm.gc_frontier.count = 0;
-	vm.gc_frontier.capacity = 0;
-	
+	vm.gc.objects = NULL;
+	vm.gc.count = 0;
+	vm.gc.capacity = 0;
+	vm.gc.allocated = 0;
+	vm.gc.threshold = 2 << 8;
 
 	define_native_fn("clock", clock_native);
 }
@@ -83,28 +85,27 @@ void vm_free()
 	stack_reset();
 }
 
-bool gc_frontier_empty()
+bool gc_empty()
 {
-	return vm.gc_frontier.count == 0;
+	return vm.gc.count == 0;
 }
 
-void gc_frontier_push(Obj * obj)
+void gc_push(Obj * obj)
 {
-	if (vm.gc_frontier.count == vm.gc_frontier.capacity)
+	if (vm.gc.count == vm.gc.capacity)
 	{
-		int new_cap = GROW_CAPACITY(vm.gc_frontier.capacity);
-		vm.gc_frontier.objects = GROW_ARRAY(Obj*, vm.gc_frontier.objects,
-			vm.gc_frontier.capacity, new_cap);
-		vm.gc_frontier.capacity = new_cap;
+		int new_cap = GROW_CAPACITY(vm.gc.capacity);
+		vm.gc.objects = realloc(vm.gc.objects, new_cap * sizeof(Obj*));
+		vm.gc.capacity = new_cap;
 	}
 
-	vm.gc_frontier.objects[vm.gc_frontier.count++] = obj;
+	vm.gc.objects[vm.gc.count++] = obj;
 }
 
-Obj * gc_frontier_pop()
+Obj * gc_pop()
 {
-	if (vm.gc_frontier.count == 0) return NULL;
-	return vm.gc_frontier.objects[--vm.gc_frontier.count];
+	if (vm.gc.count == 0) return NULL;
+	return vm.gc.objects[--vm.gc.count];
 }
 
 static bool is_falsey(Value val)
@@ -112,10 +113,13 @@ static bool is_falsey(Value val)
 	return IS_NIL(val) || (IS_BOOL(val) && !AS_BOOL(val));
 }
 
+/** Concatenate two strings that are on top of the stack.
+ *  The result of the concatenation is pushed back into the stack.
+ * */
 static void concatenate()
 {
-	StringObj * right = AS_STRING(vm_stack_pop());
-	StringObj * left = AS_STRING(vm_stack_pop());
+	StringObj * right = AS_STRING(vm_stack_peek(0));
+	StringObj * left = AS_STRING(vm_stack_peek(1));
 
 	size_t total_length = right->length + left->length;
 
@@ -127,6 +131,9 @@ static void concatenate()
 	StringObj * concat_str_obj = StringObj_construct(concat_string, total_length);
 
 	free(concat_string);
+	vm_stack_pop();
+	vm_stack_pop();
+
 	vm_stack_push(OBJ_VAL(*concat_str_obj));
 
 }
@@ -291,16 +298,14 @@ do {\
 	{
 #ifdef DBG_TRACE_EXECUTION
 		/* Print stack values */
+		printf("== begin value stack trace ==\n");
 		for (Value * ptr = vm.stack; ptr < vm.stack_top; ++ptr)
 		{
-			if (ptr == vm.stack)
-				printf("	");
 			printf("[ ");
 			print_value(*ptr);
 			printf(" ]\n");
-			if (ptr + 1 == vm.stack_top)
-				printf("\n");
 		}
+		printf("== end value stack trace ==\n");
 #endif
 		Opcode inst;
 		switch (inst = READ_BYTE())
@@ -589,6 +594,10 @@ InterpretResult vm_interpret(Chunk * chunk)
 InterpretResult interpret(const char * source)
 {
 	ClosureObj * closure = compile(source);
+
+#ifdef DEBUG_LOG
+	printf("compiled the source code");
+#endif
 
 	if (closure == NULL)
 		return INTERPRET_COMPILE_ERROR;

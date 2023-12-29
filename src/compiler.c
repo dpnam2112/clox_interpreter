@@ -390,9 +390,15 @@ static ClosureObj * end_compiler()
 					  function->name == NULL ? "script" : function->name->chars);
 #endif
 
+	ClosureObj * closure = ClosureObj_construct(function);
+
 	// continue compiling the enclosing function
+	// Calling ClosureObj_construct may trigger the garbage collector,
+	// so to ensure that @current->function is considered reachable by
+	// the gc, we remove the compiler after creating the closure.
 	current = current->enclosing;
-	return ClosureObj_construct(function);
+
+	return closure;
 }
 
 static void unary();

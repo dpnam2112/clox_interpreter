@@ -1,6 +1,8 @@
 #include "chunk.h"
 #include "memory.h"
 #include "object.h"
+#include "vm.h"
+#include <complex.h>
 #include <stdint.h>
 
 //Expand the chunk's bytecode array so that it can contain more n bytes
@@ -13,7 +15,6 @@ do {\
 		chunk->capacity = new_cap;\
 	}\
 } while (false)
-
 
 void chunk_init(Chunk * chunk)
 {
@@ -99,11 +100,16 @@ void chunk_append_bytes(Chunk * chunk, void * bytes, int n)
 uint32_t chunk_add_const(Chunk * chunk, Value value)
 {
 	if (chunk->constants.size + 1 > CONST_POOL_LIMIT)
-	{
 		return 0;	// dummy offset
-	}
+	
+	// The call of value_arr_append can trigger the garbage collector,
+	// and the @value which will be pushed maybe used later.
+	// So we temporarily push @value into the vm's stack to prevent @value
+	// from being removed by the gc.
 
+	vm_stack_push(value);
 	value_arr_append(&chunk->constants, value);
+	vm_stack_pop(value);
 	return chunk->constants.size - 1;
 }
 

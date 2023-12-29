@@ -64,12 +64,14 @@ void print_object(Value val)
 	switch (OBJ_TYPE(val))
 	{
 		case OBJ_STRING:
-			printf ("%s", AS_CSTRING(val));
+			printf ("'%s'", AS_CSTRING(val));
 			break;
 		case OBJ_FUNCTION:
 		{
 			FunctionObj * func = AS_FUNCTION(val);
-			if (strcmp(func->name->chars, "") == 0)
+			if (!func->name)
+				printf("<fn>");
+			else if (strcmp(func->name->chars, "") != 0)
 				printf ("<fn %s>", func->name->chars);
 			else
 				printf("<script>");

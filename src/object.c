@@ -11,13 +11,13 @@ void * allocate_object(size_t size, ObjType type)
 	obj_ref->type = type;
 	obj_ref->gc_marked = false;
 
-	/* add the new object to virtual machine's object pool */
-	obj_ref->next = vm.objects;
-	vm.objects = obj_ref;
-
 #ifdef DEBUG_LOG_GC
 	printf("%p allocate %zu for %d\n", (void *) obj_ref, size, type);
 #endif
+
+	/* add the new object to virtual machine's object pool */
+	obj_ref->next = vm.objects;
+	vm.objects = obj_ref;
 
 	return obj_ref;
 }
@@ -94,6 +94,8 @@ StringObj * StringObj_construct(const char * chars, size_t length)
 	/* Allocate a string object (StringObj) to store the clone string */
 	StringObj * str_obj = StringObj_allocate(str_clone, length, hashcode);
 
+	vm_stack_push(OBJ_VAL(*str_obj));
+
 	/* Add the new string to the string table */
 	if (entry == NULL)
 	{
@@ -105,6 +107,8 @@ StringObj * StringObj_construct(const char * chars, size_t length)
 		entry->value = NIL_VAL();
 		entry->deleted = false;
 	}
+
+	vm_stack_pop();
 
 	return str_obj;
 }

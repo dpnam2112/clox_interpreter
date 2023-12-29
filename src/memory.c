@@ -11,16 +11,16 @@
 #ifdef DEBUG_LOG_GC
 /** used to print object, the output format is specific for debugging purpose */
 void dbg_print_object(Obj * obj) {
-	printf("(%p, ", obj);
-	print_value(OBJ_VAL(obj));
+	printf("(\033[1;31m%p\033[0m, ", obj);
+	print_value(OBJ_VAL(*obj));
 	printf(")");
 } 
 #endif
 
 void * reallocate(void * arr, size_t old_sz, size_t new_sz)
 {
-	if (new_sz > old_sz)
-	{
+
+	if (new_sz > old_sz) {
 #ifdef DEBUG_STRESS_GC
 		collect_garbage();
 #endif
@@ -113,16 +113,20 @@ bool mark_object(Obj * obj)
 	if (obj == NULL) return false;
 
 #ifdef DEBUG_LOG_GC
-	if (!obj->gc_marked)
-		printf("reach unmarked object at \033[1;31m%p\033[0m: ", obj);
-	else
-		printf("reach marked object at \033[1;31m%p\033[0m: ", obj);
-	print_value(OBJ_VAL(*obj));
+	if (!obj->gc_marked) {
+		printf("reach unmarked object: ", obj);
+		dbg_print_object(obj);
+	}
+	else {
+		printf("reach marked object: ", obj);
+		dbg_print_object(obj);
+
+	}
 	printf("\n");
 #endif
 
 	if (obj->gc_marked) return true;
-	gc_frontier_push(obj);
+	gc_push(obj);
 	return (obj->gc_marked = true);
 }
 
@@ -181,6 +185,7 @@ void mark_reachable_objects(Obj * obj)
 	{
 		case OBJ_CLOSURE: {
 			ClosureObj * closure = (ClosureObj *) obj;
+			mark_object(closure->function);
 			for (int i = 0; i < closure->upval_count; i++)
 			{
 				mark_object((Obj*) closure->upvalues[i]);
@@ -218,9 +223,9 @@ void mark_reachable_objects(Obj * obj)
 
 void discover_all_reachable()
 {
-	while (!gc_frontier_empty())
+	while (!gc_empty())
 	{
-		Obj * obj = gc_frontier_pop();
+		Obj * obj = gc_pop();
 #ifdef DEBUG_LOG_GC
 		printf("Marking all reachable objects of: ");
 		dbg_print_object(obj);

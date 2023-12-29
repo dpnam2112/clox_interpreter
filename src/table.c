@@ -2,7 +2,6 @@
 #include "memory.h"
 #include "value.h"
 #include "object.h"
-#include <math.h>
 
 void table_init(Table * table)
 {
