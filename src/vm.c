@@ -1,5 +1,6 @@
 #include "vm.h"
 #include "chunk.h"
+#include "memory.h"
 #include "debug.h"
 #include "value.h"
 #include "compiler.h"
@@ -123,7 +124,7 @@ static void concatenate()
 
 	size_t total_length = right->length + left->length;
 
-	char * concat_string = malloc(total_length + 1);
+	char * concat_string = ALLOCATE(char, total_length + 1);
 	memcpy(concat_string, left->chars, left->length);
 	memcpy(concat_string + left->length, right->chars, right->length);
 	concat_string[total_length] = '\0';

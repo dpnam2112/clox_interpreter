@@ -1,5 +1,6 @@
 #include "memory.h"
 #include "object.h"
+#include "compiler.h" // for mark_compiler_roots()
 #include "vm.h"
 
 #ifdef DEBUG_LOG_GC
@@ -28,6 +29,7 @@ void * reallocate(void * arr, size_t old_sz, size_t new_sz)
 #else
 		if (vm.gc.allocated >= vm.gc.threshold) {
 			collect_garbage();
+	
 		}
 #endif
 	}
@@ -284,4 +286,6 @@ void collect_garbage()
 #ifdef DEBUG_LOG_GC
 	printf("== end gc ==\n");
 #endif
+
+	vm.gc.threshold = vm.gc.allocated * GC_GROW_FACTOR;
 }

@@ -22,6 +22,7 @@ void chunk_init(Chunk * chunk)
 	chunk->capacity = 0;
 	chunk->bytecodes = NULL;
 	chunk->current_line = 0;
+	chunk->line_tracker = NULL;
 	value_arr_init(&(chunk->constants));
 }
 
@@ -34,23 +35,46 @@ void chunk_free(Chunk * chunk)
 
 	value_arr_free(&(chunk->constants));
 	chunk_init(chunk);
+
+#ifdef CHANGE_LINE_TRACKER
+	while (chunk->line_tracker != NULL) {
+		BytecodeLine * new_head = chunk->line_tracker;
+		chunk->line_tracker = chunk->line_tracker->next;
+		FREE(BytecodeLine, new_head);
+	}
+#endif
 }
 
-void chunk_append(Chunk * chunk, uint8_t byte, uint16_t line)
-{
-	if (line > 0 && line != chunk->current_line)
-	{
-		// Add line metadata (3 bytes)
+/** Add information to track line numbers of bytecodes
+ *  @bytecode_pos: position of the bytecode 
+ *  @line: line number associated to the bytecode at @bytecode_pos */
+void add_line_metadata(Chunk * chunk, uint32_t bytecode_pos, uint32_t line) {
+	if (line < 0 || line == chunk->current_line) {
+		return;
+	}
+#ifndef CHANGE_LINE_TRACKER
 		FIT_EXPAND_CHUNK(chunk, 3);
 		chunk->bytecodes[chunk->size] = META_LINE_NUM; 
 		memcpy(&(chunk->bytecodes[chunk->size + 1]), &line, 2);
 		chunk->size += 3;
 		chunk->current_line = line;
-	}
+#else
+	BytecodeLine * bytecode_line = ALLOCATE(BytecodeLine, sizeof(BytecodeLine));
+	bytecode_line->line = line;
+	bytecode_line->pos = bytecode_pos;
 
+	bytecode_line->next = chunk->line_tracker;
+	chunk->line_tracker = bytecode_line;
+#endif
+}
+
+void chunk_append(Chunk * chunk, uint8_t byte, uint16_t line)
+{
 	FIT_EXPAND_CHUNK(chunk, 1);
 	chunk->bytecodes[chunk->size] = byte;
+	add_line_metadata(chunk, chunk->size, line);
 	chunk->size++;
+
 }
 
 int get_inst_size(Opcode type)
@@ -77,6 +101,7 @@ int get_inst_size(Opcode type)
 
 uint16_t chunk_get_line(Chunk * chunk, uint32_t index)
 {
+#ifndef CHANGE_LINE_TRACKER
 	uint16_t line;
 	uint32_t i;
 	for (i = 0; i < index && i < chunk->size;)
@@ -88,6 +113,15 @@ uint16_t chunk_get_line(Chunk * chunk, uint32_t index)
 	}
 
 	return line;
+#else
+	BytecodeLine * iter = chunk->line_tracker;
+	for (; iter != NULL; iter = iter->next) {
+		if (index > iter->pos)
+			break;
+	}
+
+	return iter->line;
+#endif
 }
 
 void chunk_append_bytes(Chunk * chunk, void * bytes, int n)
@@ -115,6 +149,7 @@ uint32_t chunk_add_const(Chunk * chunk, Value value)
 
 void chunk_write_load_const(Chunk * chunk, Value value, uint16_t line)
 {
+
 	// position of the value in constant pool
 	uint32_t const_offset = 0;
 	const_offset = chunk_add_const(chunk, value);

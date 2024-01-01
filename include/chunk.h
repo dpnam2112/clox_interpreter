@@ -1,8 +1,6 @@
 #ifndef CHUNK_H
 #define CHUNK_H
 
-#include "common.h"
-#include "memory.h"
 #include "value.h"
 
 #define INIT_SIZE 8
@@ -62,6 +60,15 @@ typedef enum
 	META_LINE_NUM,
 } Opcode;
 
+/** Used to keep track of line numbers of bytecodes.
+ * */
+typedef struct BytecodeLine
+{
+	uint32_t line;	// line number
+	uint32_t pos;	// bytecode position
+	struct BytecodeLine * next;
+} BytecodeLine;
+
 // Dynamic array of bytecodes
 typedef struct
 {
@@ -70,7 +77,9 @@ typedef struct
 	uint32_t capacity;
 	ValueArr constants;	// constant values
 	uint16_t current_line;	// current line number
+	BytecodeLine * line_tracker;
 } Chunk;
+
 
 void chunk_init(Chunk * chunk);
 void chunk_free(Chunk * chunk);

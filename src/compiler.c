@@ -382,8 +382,6 @@ static ClosureObj * end_compiler()
 	emit_return();
 	FunctionObj *function = current->function;
 	function->upval_count = current->upval_count;
-#ifdef BYTECODE_DUMP
-#endif
 #ifdef DBG_DISASSEMBLE
 	/* Print the instruction to be executed */
 	disassemble_chunk(&function->chunk,

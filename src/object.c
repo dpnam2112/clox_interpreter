@@ -1,5 +1,6 @@
 #include "object.h"
 #include "vm.h"
+#include "memory.h"
 #include "table.h"
 
 #define OBJ_ALLOC(type, objectType) \
