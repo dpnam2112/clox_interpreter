@@ -24,7 +24,7 @@ void table_free(Table * table)
 static Entry * find_entry(Entry * entries, uint32_t capacity, StringObj * key)
 {
 	Entry * tombstone = NULL;
-	uint32_t start = key->hashcode % capacity, i = start, end_loop = false;
+	uint32_t start = key->hashcode & (capacity - 1), i = start, end_loop = false;
 	while (!end_loop) {
 		if (entries[i].key == NULL)
 		{

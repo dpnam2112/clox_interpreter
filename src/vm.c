@@ -17,10 +17,9 @@ static void stack_reset()
 	vm.stack_top = vm.stack;
 }
 
-void vm_stack_push(Value value)
+inline void vm_stack_push(Value value)
 {
-	*(vm.stack_top) = value;
-	vm.stack_top++;
+	*(vm.stack_top++) = value;
 }
 
 Value vm_stack_pop()
