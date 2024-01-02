@@ -127,12 +127,16 @@ FunctionObj * FunctionObj_construct()
 
 ClosureObj * ClosureObj_construct(FunctionObj * function) {
 	ClosureObj * closure = OBJ_ALLOC(ClosureObj, OBJ_CLOSURE);
+	// allocation for UpvalueObj may trigger the garbage collection process
+	vm_stack_push(OBJ_VAL(*closure));
+
 	closure->function = function;
 	closure->upvalues = (function->upval_count) ? ALLOCATE(UpvalueObj *, sizeof(UpvalueObj *) * function->upval_count) : NULL;
 	for (int i = 0; i < function->upval_count; i++) {
 		closure->upvalues[i] = NULL;
 	}
 	closure->upval_count = function->upval_count;
+	vm_stack_pop();
 	return closure;
 }
 

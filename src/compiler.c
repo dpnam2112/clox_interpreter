@@ -7,7 +7,6 @@
 #include "object.h"
 #include "memory.h"
 #include <stdlib.h>
-#include <math.h>
 
 typedef struct IntArr
 {
@@ -92,7 +91,7 @@ bool mark_compiler_roots()
 	Compiler * compiler_it = current;
 	while (compiler_it != NULL)
 	{
-		mark_object(compiler_it->function);
+		mark_object((Obj*) compiler_it->function);
 		compiler_it = compiler_it->enclosing;
 	}
 
@@ -204,11 +203,6 @@ static void compiler_init(Compiler *compiler, FunctionType type)
 
 	// dummy local
 	add_local((Token){TK_EOF, "", 0, 0});
-}
-
-static void compiler_free()
-{
-	current = NULL;
 }
 
 void parser_init()
@@ -387,7 +381,6 @@ static ClosureObj * end_compiler()
 	disassemble_chunk(&function->chunk,
 					  function->name == NULL ? "script" : function->name->chars);
 #endif
-
 	ClosureObj * closure = ClosureObj_construct(function);
 
 	// continue compiling the enclosing function
@@ -551,7 +544,7 @@ static uint32_t resolve_upvalue(Compiler * compiler,  Token * name)
 	// We consider if the variable is not found in any enclosing functions,
 	// it is global by default
 
-	uint32_t enclosing_local = resolve_local(compiler->enclosing, name);
+	int enclosing_local = resolve_local(compiler->enclosing, name);
 	if (enclosing_local != -1) {
 		compiler->enclosing->locals[enclosing_local].captured = true;
 		return add_upvalue(compiler, enclosing_local, true);
@@ -588,7 +581,7 @@ static void assignment()
 
 	parse_precedence(PREC_ASSIGNMENT);
 
-	uint32_t stack_index = resolve_local(current, &name);
+	int stack_index = resolve_local(current, &name);
 	uint32_t upvalue_index = 0;
 
 	if (stack_index != -1 && stack_index <= UINT8_MAX)
@@ -615,16 +608,16 @@ static void variable()
 	if (parser.current.type == TK_EQUAL)
 		return;
 
-	uint32_t stack_index = resolve_local(current, &parser.prev);
-	uint32_t upvalue_index;
+	int stack_index = resolve_local(current, &parser.prev);
+	int upvalue_index;
 	if (stack_index != -1 && stack_index <= UINT8_MAX)
-		emit_param_inst(OP_GET_LOCAL, stack_index, 1);
+		emit_param_inst(OP_GET_LOCAL, (uint32_t) stack_index, 1);
 	else if (stack_index != -1)
-		emit_param_inst(OP_GET_LOCAL_LONG, stack_index, LONG_LOCAL_OFFSET_SIZE);
+		emit_param_inst(OP_GET_LOCAL_LONG, (uint32_t) stack_index, LONG_LOCAL_OFFSET_SIZE);
 	else if ((upvalue_index = resolve_upvalue(current, &parser.prev)) != -1 && upvalue_index <= UINT8_MAX)
-		emit_param_inst(OP_GET_UPVAL, upvalue_index, 1);
+		emit_param_inst(OP_GET_UPVAL, (uint32_t) upvalue_index, 1);
 	else if (upvalue_index != -1)
-		emit_param_inst(OP_GET_UPVAL_LONG, upvalue_index, LONG_UPVAL_OFFSET_SIZE);
+		emit_param_inst(OP_GET_UPVAL_LONG, (uint32_t) upvalue_index, LONG_UPVAL_OFFSET_SIZE);
 	else if (offset <= UINT8_MAX)
 		emit_param_inst(OP_GET_GLOBAL, offset, 1);
 	else
@@ -823,7 +816,7 @@ static void declare_variable(Token name)
 {
 	if (current->scope_depth == 0)
 		return;
-	for (Local *local_it = &current->locals[current->local_count - 1];
+	for (Local * local_it = &current->locals[current->local_count - 1];
 		 local_it >= &current->locals; local_it--)
 	{
 		if (local_it->depth != -1 && local_it->depth < current->scope_depth)

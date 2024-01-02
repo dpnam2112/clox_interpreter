@@ -2,6 +2,7 @@
 #define COMMON_H
 
 #include <stdbool.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -9,8 +10,7 @@
 
 ///* Configurations */
 // #define DBG_TRACE_EXECUTION
-#define DBG_DISASSEMBLE
-#define CHANGE_LINE_TRACKER
+// #define DBG_DISASSEMBLE
 // #define DEBUG_STRESS_GC
 // #define DEBUG_LOG_GC
 

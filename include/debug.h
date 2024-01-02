@@ -3,10 +3,9 @@
 
 #include "chunk.h"
 #include "common.h"
-#include <stdio.h>
 
 void disassemble_chunk(Chunk * chunk, const char * name);
-int disassemble_inst(Chunk * chunk, int offset);
+int disassemble_inst(Chunk * chunk, size_t offset);
 void chunk_bytecode_dump(Chunk * chunk, const char * name);
 
 #endif

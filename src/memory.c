@@ -170,10 +170,10 @@ void mark_vm_roots()
 
 	for (CallFrame * frame = vm.frames; frame < &vm.frames[vm.frame_count]; frame++)
 	{
-		mark_object(frame->closure);
+		mark_object((Obj *) frame->closure);
 		for (int i = 0; i < frame->closure->upval_count; i++)
 		{
-			mark_object(&(frame->closure->upvalues[i]));
+			mark_object((Obj *) frame->closure->upvalues[i]);
 		}
 	}
 
@@ -193,9 +193,13 @@ void mark_reachable_objects(Obj * obj)
 	{
 		case OBJ_CLOSURE: {
 			ClosureObj * closure = (ClosureObj *) obj;
-			mark_object(closure->function);
+			mark_object((Obj*) closure->function);
 			for (int i = 0; i < closure->upval_count; i++)
 			{
+				if (closure->upvalues[i] == NULL) {
+					continue;
+				}
+
 				mark_object((Obj*) closure->upvalues[i]);
 #ifdef DEBUG_LOG_GC
 				printf("Marked the object: ");
@@ -208,9 +212,9 @@ void mark_reachable_objects(Obj * obj)
 		}
 		case OBJ_FUNCTION: {
 			FunctionObj * function = (FunctionObj *) obj;
-			mark_object(function->name);
+			mark_object((Obj*) function->name);
 			ValueArr * const_pool = &(function->chunk.constants);
-			for (int i = 0; i < const_pool->size; i++)
+			for (size_t i = 0; i < const_pool->size; i++)
 			{
 				mark_value(const_pool->values[i]);
 			}

@@ -21,8 +21,6 @@ typedef enum
 	OP_RETURN,
 	OP_NEGATE,
 	OP_EXIT,
-	OP_AND,
-	OP_OR,
 	OP_NOT,
 	OP_PRINT,
 	OP_POP,

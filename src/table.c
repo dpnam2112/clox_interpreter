@@ -104,7 +104,7 @@ bool table_delete(Table * table, StringObj * key, Value * dest)
 
 void table_remove_unmarked_object(Table * table)
 {
-	for (int i = 0; i < table->capacity; i++)
+	for (uint32_t i = 0; i < table->capacity; i++)
 	{
 		Entry * entry = &table->entries[i];
 		if (entry->key != NULL && !entry->key->obj.gc_marked)

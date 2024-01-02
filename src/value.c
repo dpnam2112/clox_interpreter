@@ -72,7 +72,7 @@ void print_object(Value val)
 			if (!func->name)
 				printf("<fn>");
 			else if (strcmp(func->name->chars, "") != 0)
-				printf ("<fn %s>", func->name->chars);
+				printf ("<fn '%s'>", func->name->chars);
 			else
 				printf("<script>");
 			break;
@@ -82,6 +82,11 @@ void print_object(Value val)
 			break;
 		case OBJ_NATIVE_FN:
 			printf("<native function>");
+			break;
+		case OBJ_CLOSURE:
+			ClosureObj * closure = AS_CLOSURE(val);
+			StringObj * closure_name = closure->function->name;
+			printf("<closure '%s'>", (closure_name == NULL) ? "" : closure_name->chars);
 			break;
 		case OBJ_NONE:
 			printf("not an object");

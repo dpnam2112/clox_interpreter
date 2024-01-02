@@ -98,8 +98,8 @@ static inline bool is_obj_type(Value value, ObjType type)
  * that contains a clone of the string pointed by @chars */
 StringObj * StringObj_construct(const char * chars, size_t length);
 FunctionObj * FunctionObj_construct();
-ClosureObj * ClosureObj_construct();
-UpvalueObj * UpvalueObj_construct();
+ClosureObj * ClosureObj_construct(FunctionObj *);
+UpvalueObj * UpvalueObj_construct(Value *);
 NativeFnObj * NativeFnObj_construct(NativeFn func);
 
 /* print_object: print the string representation of an object */

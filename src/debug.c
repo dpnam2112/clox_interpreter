@@ -2,17 +2,17 @@
 #include "chunk.h"
 #include "object.h"
 
-uint16_t current_line;
+size_t current_line;
 bool line_change;
 
 void disassemble_chunk(Chunk * chunk, const char * name)
 {
 	// Initialize bytecode logger's state
-	current_line = 1;
+	current_line = 0;
 	line_change = false;
 
 	printf("== %s ==\n", name);
-	for (int offset = 0; offset < chunk->size;)
+	for (size_t offset = 0; offset < chunk->size;)
 	{
 		offset = disassemble_inst(chunk, offset);
 	}
@@ -29,14 +29,13 @@ int simple_instruction(const char * name, int offset)
 int const_instruction(const char * name, Chunk * chunk, int offset)
 {
 	// offset of the constant value in chunk->values
-	Opcode opcode = chunk->bytecodes[offset];
 	uint8_t const_offset = chunk->bytecodes[offset + 1];
-	printf("%-16s %4d '", name, const_offset);
+	printf("%-16s %4d ", name, const_offset);
 
 	Value const_value = chunk->constants.values[const_offset];
 	print_value(const_value);
 
-	printf("'\n");
+	printf("\n");
 	return offset + 2;
 }
 
@@ -110,20 +109,18 @@ int line_number(Chunk * chunk, int offset)
 	return offset + 3;
 }
 
-int disassemble_inst(Chunk *chunk, int offset)
+int disassemble_inst(Chunk *chunk, size_t offset)
 {
-	printf("%04d ", offset);
+	printf("%04lu ", offset);
 	Opcode inst = chunk->bytecodes[offset];	// Get the instruction
+	size_t inst_line = chunk_get_line(chunk, offset);
 
-	if (line_change)
-	{
-		printf("%03d ", current_line);
-		line_change = false;
+	if (inst_line != current_line) {
+		printf("%03lu ", inst_line);
+		current_line = inst_line;
 	}
 	else
-	{
 		printf("  | ");
-	}
 
 	switch (inst)
 	{
@@ -151,10 +148,6 @@ int disassemble_inst(Chunk *chunk, int offset)
 			return simple_instruction("OP_NIL", offset);
 		case OP_NOT:
 			return simple_instruction("OP_NOT", offset);
-		case OP_AND:
-			return simple_instruction("OP_AND", offset);
-		case OP_OR:
-			return simple_instruction("OP_OR", offset);
 		case OP_EQUAL:
 			return simple_instruction("OP_EQUAL", offset);
 		case OP_LESS:
@@ -213,7 +206,7 @@ int disassemble_inst(Chunk *chunk, int offset)
 				else
 					upval_index = chunk->bytecodes[offset++];
 
-				printf("%04d   |                     %s %d\n", offset - 2, local ? "local" : "upvalue", upval_index);
+				printf("%04lu   |                     %s %d\n", offset - 2, local ? "local" : "upvalue", upval_index);
 			}
 
 			return offset;
@@ -232,24 +225,24 @@ int disassemble_inst(Chunk *chunk, int offset)
 	return offset;
 }
 
-
-// dump one bytecode line of the chunk, starting from 'start'
-uint8_t chunk_bytecode_dump_line(Chunk * chunk, uint32_t start)
-{
-	uint8_t i;
-	for (i = 0; i < 8 && start + i < chunk->size; i++)
-	{
-		printf("%02x ", chunk->bytecodes[start + i]);
-	}
-}
-
-void chunk_bytecode_dump(Chunk * chunk, const char * name)
-{
-	printf("=== %s ===\n", name);
-	uint32_t start = 0;
-	while (start < chunk->size)
-	{
-		start += chunk_bytecode_dump_line(chunk, start);
-		printf("\n");
-	}
-}
+//
+//// dump one bytecode line of the chunk, starting from 'start'
+//uint8_t chunk_bytecode_dump_line(Chunk * chunk, uint32_t start)
+//{
+//	uint8_t i;
+//	for (i = 0; i < 8 && start + i < chunk->size; i++)
+//	{
+//		printf("%02x ", chunk->bytecodes[start + i]);
+//	}
+//}
+//
+//void chunk_bytecode_dump(Chunk * chunk, const char * name)
+//{
+//	printf("=== %s ===\n", name);
+//	uint32_t start = 0;
+//	while (start < chunk->size)
+//	{
+//		start += chunk_bytecode_dump_line(chunk, start);
+//		printf("\n");
+//	}
+//}

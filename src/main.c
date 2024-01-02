@@ -1,8 +1,5 @@
 #include "common.h"
-#include "debug.h"
-#include "chunk.h"
 #include "vm.h"
-#include "compiler.h"
 
 // read-eval-print loop
 static void repl();

@@ -1,7 +1,6 @@
 #include "vm.h"
 #include "chunk.h"
 #include "memory.h"
-#include "debug.h"
 #include "value.h"
 #include "compiler.h"
 #include "object.h"
@@ -129,8 +128,8 @@ static void concatenate()
 	concat_string[total_length] = '\0';
 
 	StringObj * concat_str_obj = StringObj_construct(concat_string, total_length);
+	FREE(char, concat_string);
 
-	free(concat_string);
 	vm_stack_pop();
 	vm_stack_pop();
 
@@ -433,7 +432,7 @@ do {\
 		case OP_DEFINE_GLOBAL_LONG:
 		{
 			uint32_t iden_offset = (inst == OP_DEFINE_GLOBAL) ? READ_BYTE() : READ_BYTES(LONG_CONST_OFFSET_SIZE);
-			StringObj * identifier = AS_OBJ(READ_CONST_AT(iden_offset));
+			StringObj * identifier = AS_STRING(READ_CONST_AT(iden_offset));
 			table_set(&vm.globals, identifier, vm_stack_peek(0));
 			vm_stack_pop();
 			break;
@@ -442,7 +441,7 @@ do {\
 		case OP_GET_GLOBAL_LONG:
 		{
 			uint32_t offset = (inst == OP_GET_GLOBAL) ? READ_BYTE() : READ_BYTES(LONG_CONST_OFFSET_SIZE);
-			StringObj * identifier = AS_OBJ(READ_CONST_AT(offset));
+			StringObj * identifier = AS_STRING(READ_CONST_AT(offset));
 			Value value;
 			if (!table_get(&vm.globals, identifier, &value))
 			{
@@ -459,7 +458,7 @@ do {\
 		case OP_SET_GLOBAL_LONG:
 		{
 			uint32_t offset = (inst == OP_SET_GLOBAL) ? READ_BYTE() : READ_BYTES(LONG_CONST_OFFSET_SIZE);
-			StringObj * identifier = AS_OBJ(READ_CONST_AT(offset));
+			StringObj * identifier = AS_STRING(READ_CONST_AT(offset));
 			if (table_set(&vm.globals, identifier, vm_stack_peek(0)))
 			{
 				runtime_error("Undefined identifier: '%s'.", identifier->chars);
