@@ -43,7 +43,7 @@ int const_long_instruction(const char * name, Chunk * chunk, int offset)
 {
 	// offset of the constant value in chunk->values
 	uint32_t const_offset = 0;
-	memcpy(&const_offset, &(chunk->bytecodes[offset + 1]), 3);
+	memcpy(&const_offset, &(chunk->bytecodes[offset + 1]), LONG_CONST_OFFSET_SIZE);
 	printf("%-16s %4d '", name, const_offset);
 	
 	Value const_value = chunk->constants.values[const_offset];
@@ -215,6 +215,10 @@ int disassemble_inst(Chunk *chunk, size_t offset)
 			return const_long_instruction("OP_CLOSURE_LONG", chunk, offset);
 		case OP_CLOSE_UPVAL:
 			return simple_instruction("OP_CLOSE_UPVAL", offset);
+		case OP_CLASS:
+			return const_instruction("OP_CLASS", chunk, offset);
+		case OP_CLASS_LONG:
+			return const_long_instruction("OP_CLASS_LONG", chunk, offset);
 		case OP_EXIT:
 			return simple_instruction("OP_EXIT", offset);
 		default:

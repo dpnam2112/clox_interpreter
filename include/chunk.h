@@ -55,6 +55,8 @@ typedef enum
 	OP_CLOSURE,
 	OP_CLOSURE_LONG,
 	OP_CLOSE_UPVAL,
+	OP_CLASS,
+	OP_CLASS_LONG,
 	META_LINE_NUM,
 } Opcode;
 

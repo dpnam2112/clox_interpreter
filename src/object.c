@@ -39,7 +39,7 @@ uint32_t hash_string(const char * s, int length)
 
 /* return the entry containing a string that is the same as @chars or 
  * an empty entry. */
-Entry * find_existing_string_entry(const char * chars, size_t length, uint32_t hashcode)
+Entry* find_existing_string_entry(const char * chars, size_t length, uint32_t hashcode)
 {
 	if (vm.strings.capacity == 0)
 		return NULL;
@@ -67,7 +67,7 @@ Entry * find_existing_string_entry(const char * chars, size_t length, uint32_t h
 	return NULL;
 }
 
-StringObj * StringObj_allocate(const char * chars, size_t length, uint32_t hashcode)
+StringObj* StringObj_allocate(const char * chars, size_t length, uint32_t hashcode)
 {
 	StringObj * str_obj = OBJ_ALLOC(StringObj, OBJ_STRING);
 	str_obj->chars = chars;
@@ -76,7 +76,7 @@ StringObj * StringObj_allocate(const char * chars, size_t length, uint32_t hashc
 	return str_obj;
 }
 
-StringObj * StringObj_construct(const char * chars, size_t length)
+StringObj* StringObj_construct(const char * chars, size_t length)
 {
 	/* If there is an existing string that is the same as @chars,
 	 * we reuse that string.
@@ -115,7 +115,7 @@ StringObj * StringObj_construct(const char * chars, size_t length)
 	return str_obj;
 }
 
-FunctionObj * FunctionObj_construct()
+FunctionObj* FunctionObj_construct()
 {
 	FunctionObj * function = OBJ_ALLOC(FunctionObj, OBJ_FUNCTION);
 	function->arity = 0;
@@ -125,7 +125,7 @@ FunctionObj * FunctionObj_construct()
 	return function;
 }
 
-ClosureObj * ClosureObj_construct(FunctionObj * function) {
+ClosureObj* ClosureObj_construct(FunctionObj * function) {
 	ClosureObj * closure = OBJ_ALLOC(ClosureObj, OBJ_CLOSURE);
 	// allocation for UpvalueObj may trigger the garbage collection process
 	vm_stack_push(OBJ_VAL(*closure));
@@ -140,16 +140,29 @@ ClosureObj * ClosureObj_construct(FunctionObj * function) {
 	return closure;
 }
 
-UpvalueObj * UpvalueObj_construct(Value * value) {
+UpvalueObj* UpvalueObj_construct(Value * value) {
 	UpvalueObj * upvalue = OBJ_ALLOC(UpvalueObj, OBJ_UPVALUE);
 	upvalue->value = value;
 	upvalue->next = NULL;
 	return upvalue;
 }
 
-NativeFnObj * NativeFnObj_construct(NativeFn func)
+NativeFnObj* NativeFnObj_construct(NativeFn func)
 {
 	NativeFnObj * new_native = OBJ_ALLOC(NativeFnObj, OBJ_NATIVE_FN);
 	new_native->function = func;
 	return new_native;
+}
+
+ClassObj* ClassObj_construct(StringObj* name) {
+	ClassObj* new_class = OBJ_ALLOC(ClassObj, OBJ_CLASS);
+	new_class->name = name;
+	return new_class;
+}
+
+InstanceObj* InstanceObj_construct(ClassObj* klass) {
+	InstanceObj* new_instance = OBJ_ALLOC(InstanceObj, OBJ_INSTANCE);
+	new_instance->klass = klass;
+	table_init(&(new_instance->fields));
+	return new_instance;
 }

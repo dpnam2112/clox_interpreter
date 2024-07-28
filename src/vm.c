@@ -5,6 +5,7 @@
 #include "compiler.h"
 #include "object.h"
 #include "table.h"
+#include <assert.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <time.h>
@@ -134,7 +135,6 @@ static void concatenate()
 	vm_stack_pop();
 
 	vm_stack_push(OBJ_VAL(*concat_str_obj));
-
 }
 
 /* runtime_error: print out error message to stderr and reset the stack */
@@ -363,7 +363,7 @@ do {\
 		}
 		case OP_NOT:
 		{
-			Value val_wrapper = vm_stack_pop();
+		  Value val_wrapper = vm_stack_pop();
 			vm_stack_push(BOOL_VAL(is_falsey(val_wrapper)));
 			break;
 		}
@@ -443,13 +443,11 @@ do {\
 			uint32_t offset = (inst == OP_GET_GLOBAL) ? READ_BYTE() : READ_BYTES(LONG_CONST_OFFSET_SIZE);
 			StringObj * identifier = AS_STRING(READ_CONST_AT(offset));
 			Value value;
-			if (!table_get(&vm.globals, identifier, &value))
-			{
+			if (!table_get(&vm.globals, identifier, &value)) {
 				runtime_error("Undefined identifier: '%s'.", identifier->chars);
 				return INTERPRET_RUNTIME_ERROR;
 			}
-			else
-			{
+			else {
 				vm_stack_push(value);
 			}
 			break;
@@ -500,8 +498,7 @@ do {\
 			frame->pc -= jmp_dist;
 			break;
 		}
-		case OP_CALL:
-		{
+		case OP_CALL: {
 			uint8_t param_count = READ_BYTE();
 			Value called_obj = vm_stack_peek(param_count);
 
@@ -570,6 +567,16 @@ do {\
 		{
 			close_upvalues(vm.stack_top - 1);
 			vm_stack_pop();
+			break;
+		}
+		case OP_CLASS:
+		case OP_CLASS_LONG:
+		{
+			// Create a new class, take class name's offset in the chunk's array of
+			// values as parameter.
+			Value class_name_val = (inst == OP_CLASS) ? READ_CONST() : READ_CONST_LONG();
+			ClassObj* new_class = ClassObj_construct(AS_STRING(class_name_val));
+			vm_stack_push(OBJ_VAL(*new_class));
 			break;
 		}
 	}

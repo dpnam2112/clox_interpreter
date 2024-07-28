@@ -84,9 +84,16 @@ void print_object(Value val)
 			printf("<native function>");
 			break;
 		case OBJ_CLOSURE:
-			ClosureObj * closure = AS_CLOSURE(val);
-			StringObj * closure_name = closure->function->name;
+			ClosureObj* closure = AS_CLOSURE(val);
+			StringObj* closure_name = closure->function->name;
 			printf("<closure '%s'>", (closure_name == NULL) ? "" : closure_name->chars);
+			break;
+		case OBJ_CLASS:
+			printf("<class '%s'>", AS_CLASS(val)->name->chars);
+			break;
+		case OBJ_INSTANCE:
+			printf("<%s instance>",
+					AS_INSTANCE(val)->klass->name->chars);
 			break;
 		case OBJ_NONE:
 			printf("not an object");
@@ -104,6 +111,7 @@ bool callable(Value val)
 		case OBJ_FUNCTION:
 		case OBJ_CLOSURE:
 		case OBJ_NATIVE_FN:
+		case OBJ_CLASS:
 			return true;
 	}
 

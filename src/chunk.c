@@ -135,6 +135,7 @@ void chunk_write_load_const(Chunk * chunk, Value value, uint16_t line)
 
 	if (IS_CLOSURE_OBJ(value))
 		load_const = OP_CLOSURE, load_const_long = OP_CLOSURE_LONG;
+	
 	else
 		load_const = OP_CONST, load_const_long = OP_CONST_LONG;
 

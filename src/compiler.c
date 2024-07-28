@@ -404,6 +404,7 @@ static void stmt();
 static void block_stmt();
 static void var_declaration();
 static void fun_declaration();
+static void class_declaration();
 static void if_stmt();
 static void while_stmt();
 static void for_stmt();
@@ -630,6 +631,8 @@ static void declaration()
 		var_declaration();
 	else if (match(TK_FUN))
 		fun_declaration();
+	else if (match(TK_CLASS))
+		class_declaration();
 	else
 		stmt();
 
@@ -804,6 +807,23 @@ static void function(FunctionType type)
 	}
 }
 
+static void class_declaration() {
+	// Offset of the identifier in the chunk's array of values
+	uint32_t name_offset = parse_identifier("Expect an identifier after 'class'.");
+	declare_variable(parser.consumed_identifier);
+
+	// Emit instruction to define a class
+	if (name_offset < UINT8_MAX) {
+		emit_param_inst(OP_CLASS, name_offset, 1);
+	} else {
+		emit_param_inst(OP_CLASS_LONG, name_offset, LONG_CONST_OFFSET_SIZE);
+	}
+
+	consume(TK_LEFT_BRACE, "Expect '{' before class's body.");
+	consume(TK_RIGHT_BRACE, "Expect '}' after class's body.");
+	define_variable(name_offset);
+}
+
 static void fun_declaration()
 {
 	uint32_t name = parse_identifier("Expect function name.");
@@ -841,7 +861,7 @@ static void define_variable(uint32_t offset)
 	if (offset <= UINT8_MAX)
 		emit_param_inst(OP_DEFINE_GLOBAL, offset, 1);
 	else
-		emit_param_inst(OP_DEFINE_GLOBAL_LONG, offset, 3);
+		emit_param_inst(OP_DEFINE_GLOBAL_LONG, offset, LONG_CONST_OFFSET_SIZE);
 }
 
 /* parse_identifier: parse the identifier. If the current token is
@@ -1022,6 +1042,7 @@ static void for_stmt()
 	}
 	else
 		consume(TK_SEMICOLON, "Expect ';' after for-loop if there is no loop statement.");
+
 	emit_loop(increment_start); // jump back to increment expression if the body is executed
 	patch_jump(exit_loop);		// the body is parsed, patch the exit-loop jump
 	patch_break();

@@ -76,25 +76,42 @@ void free_native_fn_obj(NativeFnObj * obj)
 	FREE(NativeFnObj, obj);
 }
 
+void free_class_obj(ClassObj* obj) {
+	FREE(ClassObj, obj);
+}
+
+void free_instance_obj(InstanceObj* instance) {
+	table_free(&(instance->fields));
+	instance->klass = NULL;
+	FREE(InstanceObj, instance);
+}
+
 void free_object(Obj * object)
 {
 	switch (object->type)
 	{
 		case OBJ_STRING:
-			free_string_obj(object);
+			free_string_obj((StringObj*) object);
 			break;
 		case OBJ_FUNCTION:
-			free_function_obj((FunctionObj *) object);
+			free_function_obj((FunctionObj*) object);
 			break;
 		case OBJ_CLOSURE:
-			free_closure_obj((ClosureObj *) object);
+			free_closure_obj((ClosureObj*) object);
 			break;
 		case OBJ_UPVALUE:
-			free_upvalue_obj((UpvalueObj *) object);
+			free_upvalue_obj((UpvalueObj*) object);
 			break;
 		case OBJ_NATIVE_FN:
-			free_native_fn_obj((NativeFnObj *) object);
+			free_native_fn_obj((NativeFnObj*) object);
 			break;
+		case OBJ_CLASS:
+			free_class_obj((ClassObj*) object);
+			break;
+		case OBJ_INSTANCE:
+			free_instance_obj((InstanceObj*) object);
+			break;
+		default:
 	}
 
 #ifdef DEBUG_LOG_GC
@@ -183,7 +200,7 @@ void mark_vm_roots()
 	}
 }
 
-/** Mark all reachable objects from @obj.
+/** Mark all reachable objects from object @obj.
  *  
  *  @obj: the starting point to search for other reachable nodes.
  * */
@@ -226,6 +243,17 @@ void mark_reachable_objects(Obj * obj)
 				mark_value(upvalue->cloned);
 			else
 				mark_value(*(upvalue->value));
+			break;
+		}
+		case OBJ_CLASS: {
+			ClassObj* obj = (ClassObj*) obj;
+			mark_object((Obj*) obj->name);
+			break;
+		}
+		case OBJ_INSTANCE: {
+			InstanceObj* instance = (InstanceObj*) obj;
+			mark_object((Obj*) instance->klass);
+			mark_table(&(instance->fields));
 			break;
 		}
 
