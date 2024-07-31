@@ -211,8 +211,7 @@ void mark_reachable_objects(Obj * obj)
 		case OBJ_CLOSURE: {
 			ClosureObj * closure = (ClosureObj *) obj;
 			mark_object((Obj*) closure->function);
-			for (int i = 0; i < closure->upval_count; i++)
-			{
+			for (int i = 0; i < closure->upval_count; i++) {
 				if (closure->upvalues[i] == NULL) {
 					continue;
 				}
@@ -231,8 +230,7 @@ void mark_reachable_objects(Obj * obj)
 			FunctionObj * function = (FunctionObj *) obj;
 			mark_object((Obj*) function->name);
 			ValueArr * const_pool = &(function->chunk.constants);
-			for (size_t i = 0; i < const_pool->size; i++)
-			{
+			for (size_t i = 0; i < const_pool->size; i++) {
 				mark_value(const_pool->values[i]);
 			}
 			break;

@@ -185,19 +185,51 @@ static uint32_t read_bytes(uint8_t ** pc, uint8_t byte_count)
 	return bytes;
 }
 
+bool call_value(Value value, int param_count) {
+	Obj* obj = AS_OBJ(value);
+
+	if (!callable(value)) {
+		return false;
+	}
+
+	if (IS_CLOSURE_OBJ(value)) {
+		ClosureObj* closure = AS_CLOSURE(value);
+		// Check number of parameters
+		if (param_count != closure->function->arity) {
+			runtime_error("Expect %d parameters but got %d.", closure->function->arity, param_count);
+			return false;
+		}
+
+		// Check if the frame stack is overflow
+		if (vm.frame_count >= CALL_FRAME_MAX) {
+			runtime_error("Stack overflow.");
+			return false;
+		}
+
+		CallFrame * new_frame = &vm.frames[vm.frame_count++];
+
+		new_frame->closure = closure;
+		new_frame->pc = closure->function->chunk.bytecodes;
+		new_frame->slots = vm.stack_top - param_count - 1;
+	} else if (IS_CLASS_OBJ(value)) {
+		ClassObj* class_obj = AS_CLASS(value);
+		InstanceObj* new_instance = InstanceObj_construct(class_obj);
+		vm_stack_push(OBJ_VAL(*new_instance));
+	}
+
+	return true;
+}
+
 // @call: Load the closure object @closure to the vm's frame
-bool call(ClosureObj * closure, int param_count)
-{
+bool call_closure(ClosureObj* closure, int param_count) {
 	// Check number of parameters
-	if (param_count != closure->function->arity)
-	{
+	if (param_count != closure->function->arity) {
 		runtime_error("Expect %d parameters but got %d.", closure->function->arity, param_count);
 		return false;
 	}
 
 	// Check if the frame stack is overflow
-	if (vm.frame_count >= CALL_FRAME_MAX)
-	{
+	if (vm.frame_count >= CALL_FRAME_MAX) {
 		runtime_error("Stack overflow.");
 		return false;
 	}
@@ -209,6 +241,13 @@ bool call(ClosureObj * closure, int param_count)
 	new_frame->slots = vm.stack_top - param_count - 1;
 
 	return true;
+}
+
+bool call_class_constructor(ClassObj* class_obj, int param_count) {
+      InstanceObj* new_instance = InstanceObj_construct(class_obj);
+      Value wrapper = OBJ_VAL(*new_instance);
+      vm_stack_push(wrapper);
+      return true;
 }
 
 /** @capture_upval: Create an upvalue object that references to @value
@@ -511,14 +550,15 @@ do {\
 				break;
 			}
 			
-			if (!callable(called_obj))
-			{
+			if (!callable(called_obj)) {
 				runtime_error("object is not callable.");
 				return INTERPRET_RUNTIME_ERROR;
 			}
 
-			if (!call(AS_CLOSURE(called_obj), param_count))
+			if (!call_value(called_obj, param_count)) {
 				return INTERPRET_RUNTIME_ERROR;
+			}
+
 			frame = &vm.frames[vm.frame_count - 1];
 			break;
 		}
@@ -611,7 +651,7 @@ InterpretResult interpret(const char * source)
 	vm_stack_push(OBJ_VAL(*closure));
 
 	// push the top-level code to the frame stack
-	call(closure, 0);
+	call_value(OBJ_VAL(*closure), 0);
 
 	return run();
 }
