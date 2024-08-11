@@ -733,7 +733,7 @@ static void end_scope()
 	 *  from @current->locals.
 	 */
 	for (Local *local_it = &current->locals[current->local_count - 1];
-		 local_it >= &current->locals; local_it--)
+		 local_it >= (struct Local*) &current->locals; local_it--)
 	{
 		if (local_it->depth != -1 && local_it->depth < current->scope_depth)
 			break;
@@ -837,7 +837,7 @@ static void declare_variable(Token name)
 	if (current->scope_depth == 0)
 		return;
 	for (Local * local_it = &current->locals[current->local_count - 1];
-		 local_it >= &current->locals; local_it--)
+		 local_it >= (struct Local*) &current->locals; local_it--)
 	{
 		if (local_it->depth != -1 && local_it->depth < current->scope_depth)
 		{

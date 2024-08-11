@@ -165,7 +165,7 @@ void mark_table(Table * table)
 	for (int i = 0; i < table->capacity; i++)
 	{
 		Entry * current = &(table->entries[i]);
-		mark_object(current->key);
+		mark_object((Obj*) current->key);
 		mark_value(current->value);
 	}
 }

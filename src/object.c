@@ -67,7 +67,7 @@ Entry* find_existing_string_entry(const char * chars, size_t length, uint32_t ha
 	return NULL;
 }
 
-StringObj* StringObj_allocate(const char * chars, size_t length, uint32_t hashcode)
+StringObj* StringObj_allocate(char * chars, size_t length, uint32_t hashcode)
 {
 	StringObj * str_obj = OBJ_ALLOC(StringObj, OBJ_STRING);
 	str_obj->chars = chars;
