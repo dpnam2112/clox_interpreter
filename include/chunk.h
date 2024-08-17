@@ -57,21 +57,23 @@ typedef enum
 	OP_CLOSE_UPVAL,
 	OP_CLASS,
 	OP_CLASS_LONG,
+	OP_GET_PROPERTY,
+	OP_GET_PROPERTY_LONG,
+	OP_SET_PROPERTY,
+	OP_SET_PROPERTY_LONG,
 	META_LINE_NUM,
 } Opcode;
 
 /** Used to keep track of line numbers of bytecodes.
  * */
-typedef struct BytecodeLine
-{
+typedef struct BytecodeLine {
 	uint32_t line;	// line number
 	uint32_t pos;	// bytecode position
 	struct BytecodeLine * next;
 } BytecodeLine;
 
 // Dynamic array of bytecodes
-typedef struct
-{
+typedef struct {
 	uint8_t * bytecodes;
 	uint32_t size;
 	uint32_t capacity;

@@ -12,13 +12,11 @@
 
 VM vm;
 
-static void stack_reset()
-{
+static void stack_reset() {
 	vm.stack_top = vm.stack;
 }
 
-inline void vm_stack_push(Value value)
-{
+inline void vm_stack_push(Value value) {
 	*(vm.stack_top++) = value;
 }
 
@@ -346,16 +344,13 @@ do {\
 		printf("== end value stack trace ==\n");
 #endif
 		Opcode inst;
-		switch (inst = READ_BYTE())
-		{
+		switch (inst = READ_BYTE()) {
 		case OP_EXIT:
 			return INTERPRET_OK;
-		case OP_RETURN:
-		{
+		case OP_RETURN: {
 			Value return_value = vm_stack_pop();
 			vm.frame_count--;
-			if (vm.frame_count == 0)
-			{
+			if (vm.frame_count == 0) {
 				vm_stack_pop();	// pop the top-level function
 				return INTERPRET_OK;
 			}
@@ -366,31 +361,25 @@ do {\
 			break;
 		}
 		case OP_CONST:
-		case OP_CONST_LONG:
-		{
+		case OP_CONST_LONG: {
 			Value constant = (inst == OP_CONST) ? READ_CONST() : READ_CONST_LONG();
 			vm_stack_push(constant);
 			break;
 		}
-		case OP_TRUE:
-		{
+		case OP_TRUE: {
 			vm_stack_push(BOOL_VAL(true));
 			break;
 		}
-		case OP_FALSE:
-		{
+		case OP_FALSE: {
 			vm_stack_push(BOOL_VAL(false));
 			break;
 		}
-		case OP_NIL:
-		{
+		case OP_NIL: {
 			vm_stack_push(NIL_VAL());
 			break;
 		}
-		case OP_NEGATE:
-		{
-			if (vm_stack_peek(0).type != VAL_NUMBER)
-			{
+		case OP_NEGATE: {
+			if (vm_stack_peek(0).type != VAL_NUMBER) {
 				runtime_error("Cannot negate an object that is not numeric");
 				return INTERPRET_RUNTIME_ERROR;
 			}
@@ -400,28 +389,24 @@ do {\
 			vm_stack_push(NUMBER_VAL(negated_val));
 			break;
 		}
-		case OP_NOT:
-		{
+		case OP_NOT: {
 		  Value val_wrapper = vm_stack_pop();
 			vm_stack_push(BOOL_VAL(is_falsey(val_wrapper)));
 			break;
 		}
-		case OP_ADD:
-		{
+		case OP_ADD: {
 			Value right = vm_stack_peek(0);
 			Value left = vm_stack_peek(1);
 
 			bool bothAreNums = right.type == VAL_NUMBER && left.type == VAL_NUMBER;
 			bool bothAreStrings = OBJ_TYPE(right) == OBJ_STRING && OBJ_TYPE(left) == OBJ_STRING;
 
-			if (!(bothAreNums || bothAreStrings))
-			{
+			if (!(bothAreNums || bothAreStrings)) {
 				runtime_error("Both operands must be strings or numbers");
 				return INTERPRET_RUNTIME_ERROR;
 			}
 
-			if (right.type == VAL_NUMBER)
-			{
+			if (right.type == VAL_NUMBER) {
 				vm_stack_pop();
 				vm_stack_pop();
 				vm_stack_push(NUMBER_VAL(AS_NUMBER(right) + AS_NUMBER(left)));
@@ -441,8 +426,7 @@ do {\
 		case OP_DIV:
 			BINARY_OP(NUMBER_VAL, /);
 			break;
-		case OP_EQUAL:
-		{
+		case OP_EQUAL: {
 			Value x = vm_stack_pop();
 			Value y = vm_stack_pop();
 			vm_stack_push(BOOL_VAL(value_equal(x, y)));
@@ -457,8 +441,7 @@ do {\
 		case META_LINE_NUM:
 			READ_SHORT();
 			break;
-		case OP_PRINT:
-		{
+		case OP_PRINT: {
 			Value value = vm_stack_pop();
 			print_value(value);
 			printf("\n");
@@ -468,8 +451,7 @@ do {\
 			vm_stack_pop();
 			break;
 		case OP_DEFINE_GLOBAL:
-		case OP_DEFINE_GLOBAL_LONG:
-		{
+		case OP_DEFINE_GLOBAL_LONG: {
 			uint32_t iden_offset = (inst == OP_DEFINE_GLOBAL) ? READ_BYTE() : READ_BYTES(LONG_CONST_OFFSET_SIZE);
 			StringObj * identifier = AS_STRING(READ_CONST_AT(iden_offset));
 			table_set(&vm.globals, identifier, vm_stack_peek(0));
@@ -477,8 +459,7 @@ do {\
 			break;
 		}
 		case OP_GET_GLOBAL:
-		case OP_GET_GLOBAL_LONG:
-		{
+		case OP_GET_GLOBAL_LONG: {
 			uint32_t offset = (inst == OP_GET_GLOBAL) ? READ_BYTE() : READ_BYTES(LONG_CONST_OFFSET_SIZE);
 			StringObj * identifier = AS_STRING(READ_CONST_AT(offset));
 			Value value;
@@ -492,12 +473,10 @@ do {\
 			break;
 		}
 		case OP_SET_GLOBAL:
-		case OP_SET_GLOBAL_LONG:
-		{
+		case OP_SET_GLOBAL_LONG: {
 			uint32_t offset = (inst == OP_SET_GLOBAL) ? READ_BYTE() : READ_BYTES(LONG_CONST_OFFSET_SIZE);
 			StringObj * identifier = AS_STRING(READ_CONST_AT(offset));
-			if (table_set(&vm.globals, identifier, vm_stack_peek(0)))
-			{
+			if (table_set(&vm.globals, identifier, vm_stack_peek(0))) {
 				runtime_error("Undefined identifier: '%s'.", identifier->chars);
 				table_delete(&vm.globals, identifier, NULL);
 				return INTERPRET_RUNTIME_ERROR;
@@ -505,34 +484,29 @@ do {\
 			break;
 		}
 		case OP_GET_LOCAL:
-		case OP_GET_LOCAL_LONG:
-		{
+		case OP_GET_LOCAL_LONG: {
 			uint32_t slot = (inst == OP_GET_LOCAL) ? READ_BYTE() : READ_BYTES(LONG_LOCAL_OFFSET_SIZE);
 			vm_stack_push(frame->slots[slot]);
 			break;
 		}
 		case OP_SET_LOCAL:
-		case OP_SET_LOCAL_LONG:
-		{
+		case OP_SET_LOCAL_LONG: {
 			uint32_t slot = (inst == OP_SET_LOCAL) ? READ_BYTE() : READ_BYTES(LONG_LOCAL_OFFSET_SIZE);
 			frame->slots[slot] = vm_stack_peek(0);
 			break;
 		}
-		case OP_JMP_IF_FALSE:
-		{
+		case OP_JMP_IF_FALSE: {
 			uint16_t jmp_dist = READ_SHORT();
 			if (is_falsey(vm_stack_peek(0)))
 				frame->pc += jmp_dist;
 			break;
 		}
-		case OP_JMP:
-		{
+		case OP_JMP: {
 			uint16_t jmp_dist = READ_SHORT();
 			frame->pc += jmp_dist;
 			break;
 		}
-		case OP_LOOP:
-		{
+		case OP_LOOP: {
 			uint32_t jmp_dist = READ_SHORT();
 			frame->pc -= jmp_dist;
 			break;
@@ -541,8 +515,7 @@ do {\
 			uint8_t param_count = READ_BYTE();
 			Value called_obj = vm_stack_peek(param_count);
 
-			if (IS_NATIVE_FN_OBJ(called_obj))
-			{
+			if (IS_NATIVE_FN_OBJ(called_obj)) {
 				NativeFn nav_fn = AS_NATIVE_FN(called_obj);
 				Value res = nav_fn(param_count, vm.stack_top - param_count);
 				vm.stack_top -= param_count + 1;
@@ -563,14 +536,12 @@ do {\
 			break;
 		}
 		case OP_CLOSURE:
-		case OP_CLOSURE_LONG:
-		{
+		case OP_CLOSURE_LONG: {
 			Value closure_val = (inst == OP_CLOSURE) ? READ_CONST() : READ_CONST_LONG();
 			vm_stack_push(closure_val);
 			ClosureObj * closure = AS_CLOSURE(closure_val);
 
-			for (int i = 0; i < closure->function->upval_count; i++)
-			{
+			for (int i = 0; i < closure->function->upval_count; i++) {
 				uint8_t upval_info = READ_BYTE();
 
 				bool local = upval_info & 1;						// Extract the first bit (LSB)
@@ -588,36 +559,35 @@ do {\
 			break;
 		}
 		case OP_GET_UPVAL:
-		case OP_GET_UPVAL_LONG:
-		{
+		case OP_GET_UPVAL_LONG: {
 			uint32_t upval_index = (inst == OP_GET_UPVAL) ? READ_BYTE() : READ_BYTES(LONG_UPVAL_OFFSET_SIZE);
 			UpvalueObj * upvalue = frame->closure->upvalues[upval_index];
 			vm_stack_push(*(upvalue->value));
 			break;
 		}
 		case OP_SET_UPVAL:
-		case OP_SET_UPVAL_LONG:
-		{
+		case OP_SET_UPVAL_LONG: {
 			uint32_t upval_index = (inst == OP_SET_UPVAL) ? READ_BYTE() : READ_BYTES(LONG_UPVAL_OFFSET_SIZE);
 			UpvalueObj * upvalue = frame->closure->upvalues[upval_index];
 			*(upvalue->value) = vm_stack_peek(0);
 			break;
 		}
-		case OP_CLOSE_UPVAL:
-		{
+		case OP_CLOSE_UPVAL: {
 			close_upvalues(vm.stack_top - 1);
 			vm_stack_pop();
 			break;
 		}
 		case OP_CLASS:
-		case OP_CLASS_LONG:
-		{
+		case OP_CLASS_LONG: {
 			// Create a new class, take class name's offset in the chunk's array of
 			// values as parameter.
 			Value class_name_val = (inst == OP_CLASS) ? READ_CONST() : READ_CONST_LONG();
 			ClassObj* new_class = ClassObj_construct(AS_STRING(class_name_val));
 			vm_stack_push(OBJ_VAL(*new_class));
 			break;
+		}
+		case OP_GET_PROPERTY: {
+
 		}
 	}
 }
@@ -630,15 +600,13 @@ do {\
 #undef READ_CONST_AT
 #undef BINARY_OP
 }
-InterpretResult vm_interpret(Chunk * chunk)
-{
+InterpretResult vm_interpret(Chunk * chunk) {
 	vm.chunk = chunk;
 	vm.pc = chunk->bytecodes;
 	return run();
 }
 
-InterpretResult interpret(const char * source)
-{
+InterpretResult interpret(const char * source) {
 	ClosureObj * closure = compile(source);
 
 #ifdef DEBUG_LOG

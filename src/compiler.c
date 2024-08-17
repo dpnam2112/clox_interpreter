@@ -8,20 +8,20 @@
 #include "memory.h"
 #include <stdlib.h>
 
-typedef struct IntArr
-{
+typedef struct IntArr {
 	int *head;
 	int size;
 	int capacity;
 } IntArr;
 
-typedef struct Parser
-{
+typedef struct Parser {
 	Token prev;
 	Token current;
-	Token consumed_identifier; // identifier that is consumed recently
-	bool error;				   // was there any parse error occured?
-	bool panic;				   // should the parser enter panic mode?
+	Token consumed_identifier; 	// identifier that is consumed recently
+	bool error;			// was there any parse error occured?
+	bool panic;			// should the parser enter panic mode?
+	bool assign_property;		// should the parser emit OP_SET_PROPERTY? (Take a look at
+					// dot() and assignment() for more information.)
 	Precedence prev_prec;
 
 	// These fields are used to store positions of each 
@@ -86,11 +86,9 @@ Parser parser;
 Chunk *compiling_chunk;
 Compiler * current = NULL;
 
-bool mark_compiler_roots()
-{
+bool mark_compiler_roots() {
 	Compiler * compiler_it = current;
-	while (compiler_it != NULL)
-	{
+	while (compiler_it != NULL) {
 		mark_object((Obj*) compiler_it->function);
 		compiler_it = compiler_it->enclosing;
 	}
@@ -98,21 +96,18 @@ bool mark_compiler_roots()
 	return true;
 }
 
-static void int_arr_init(IntArr *arr)
-{
+static void int_arr_init(IntArr *arr) {
 	arr->head = ALLOCATE(int, 10);
 	arr->size = 0;
 	arr->capacity = 10;
 }
 
-static void int_arr_free(IntArr *arr)
-{
+static void int_arr_free(IntArr *arr) {
 	FREE_ARRAY(int, arr->head, arr->capacity);
 	arr->capacity = arr->size = 0;
 }
 
-static void emit_error_msg(Token *tk_error, const char *msg)
-{
+static void emit_error_msg(Token *tk_error, const char *msg) {
 	if (parser.panic)
 		return;
 	parser.panic = true;
@@ -127,17 +122,14 @@ static void emit_error_msg(Token *tk_error, const char *msg)
 		fprintf(stderr, ": %.*s\n", tk_error->length, tk_error->start);
 }
 
-static void error(Token *tk_error, const char *msg)
-{
+static void error(Token *tk_error, const char *msg) {
 	parser.error = true;
 	emit_error_msg(tk_error, msg);
 }
 
 
-static void int_arr_append(IntArr *arr, int item)
-{
-	if (arr->size + 1 == arr->capacity)
-	{
+static void int_arr_append(IntArr *arr, int item) {
+	if (arr->size + 1 == arr->capacity) {
 		int old_cap = arr->capacity;
 		arr->capacity = GROW_CAPACITY(old_cap);
 		arr->head = GROW_ARRAY(int, arr->head, old_cap, arr->capacity);
@@ -210,6 +202,7 @@ void parser_init()
 	parser.error = false;
 	parser.panic = false;
 	parser.prev_prec = PREC_NONE;
+	parser.assign_property = false;
 	parser.breaks = NULL;
 	parser.continues = NULL;
 }
@@ -291,11 +284,9 @@ static uint32_t identifier_constant(Token *tk)
 	return chunk_add_const(current_chunk(), OBJ_VAL(*identifier));
 }
 
-static void advance()
-{
+static void advance() {
 	parser.prev = parser.current;
-	while (true)
-	{
+	while (true) {
 		parser.current = scan_token();
 		if (parser.current.type != TK_ERROR)
 			break;
@@ -303,33 +294,29 @@ static void advance()
 	}
 }
 
-static bool check(TokenType type)
-{
+static bool check(TokenType type) {
 	return parser.current.type == type;
 }
 
-static void synchronize()
-{
+static void synchronize() {
 	parser.panic = false;
-	while (parser.current.type != TK_EOF)
-	{
+	while (parser.current.type != TK_EOF) {
 		if (parser.prev.type == TK_SEMICOLON)
 			break;
 
-		switch (parser.current.type)
-		{
-		case TK_VAR:
-		case TK_PRINT:
-		case TK_CLASS:
-		case TK_FUN:
-		case TK_WHILE:
-		case TK_FOR:
-		case TK_IF:
-		case TK_BREAK:
-		case TK_CONTINUE:
-		case TK_RETURN:
-			break;
-		default:;
+		switch (parser.current.type) {
+			case TK_VAR:
+			case TK_PRINT:
+			case TK_CLASS:
+			case TK_FUN:
+			case TK_WHILE:
+			case TK_FOR:
+			case TK_IF:
+			case TK_BREAK:
+			case TK_CONTINUE:
+			case TK_RETURN:
+				break;
+			default:;
 		}
 
 		advance();
@@ -392,6 +379,7 @@ static ClosureObj * end_compiler()
 	return closure;
 }
 
+static void dot();
 static void unary();
 static void binary();
 static void grouping();
@@ -436,7 +424,7 @@ ParseRule parse_rules[] = {
 	[TK_LEFT_BRACE] = {NULL, NULL, PREC_NONE},
 	[TK_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
 	[TK_COMMA] = {NULL, NULL, PREC_NONE},
-	[TK_DOT] = {NULL, NULL, PREC_NONE},
+	[TK_DOT] = {NULL, dot, PREC_CALL},
 	[TK_MINUS] = {unary, binary, PREC_TERM},
 	[TK_PLUS] = {NULL, binary, PREC_TERM},
 	[TK_SEMICOLON] = {NULL, NULL, PREC_NONE},
@@ -470,13 +458,11 @@ ParseRule parse_rules[] = {
 	[TK_EOF] = {NULL, NULL, PREC_NONE},
 };
 
-static ParseRule *get_rule(TokenType op)
-{
+static ParseRule *get_rule(TokenType op) {
 	return &(parse_rules[op]);
 }
 
-static bool identifier_equal(Token *tk_1, Token *tk_2)
-{
+static bool identifier_equal(Token *tk_1, Token *tk_2) {
 	return tk_1->length == tk_2->length &&
 		   memcmp(tk_1->start, tk_2->start, tk_1->length) == 0;
 }
@@ -485,16 +471,14 @@ static bool identifier_equal(Token *tk_1, Token *tk_2)
  * not lower than @prec
  * @prec: precedence's lower bound
  * */
-static void parse_precedence(Precedence prec)
-{
+static void parse_precedence(Precedence prec) {
 	// a valid expression always start with a prefix expression
-	// or a literal
+	// or a literal. E.g: -1, a + 1, b.a, .etc
 
 	advance(); // consume the prefix operator or a literal
 	ParseFn prefix_rule = get_rule(parser.prev.type)->prefix;
 
-	if (prefix_rule == NULL)
-	{
+	if (prefix_rule == NULL) {
 		error(&parser.prev, "Expect an expression.");
 		return;
 	}
@@ -502,31 +486,26 @@ static void parse_precedence(Precedence prec)
 	prefix_rule(); // call the appropriate function to parse the prefix expression or literal
 	parser.prev_prec = get_rule(parser.prev.type)->prec;
 
-	while (get_rule(parser.current.type)->prec >= prec && !parser.panic)
-	{
-		if (get_rule(parser.current.type)->prec == PREC_PRIMARY)
-		{
+	while (get_rule(parser.current.type)->prec >= prec && !parser.panic) {
+		if (get_rule(parser.current.type)->prec == PREC_PRIMARY) {
 			error(&parser.current, "Expect an operator here.");
 			break;
 		}
 
 		advance(); // consume the infix operator
-		// find the appropriate function to parse the second operand
+		// get the appropriate function to parse the second operand
 		ParseFn infix_rule = get_rule(parser.prev.type)->infix;
 		infix_rule();
 	}
 }
 
-static void expression()
-{
+static void expression() {
 	parser.prev_prec = PREC_NONE;
 	parse_precedence(PREC_ASSIGNMENT);
 }
 
-static int resolve_local(Compiler *compiler, Token *name)
-{
-	for (int i = compiler->local_count - 1; i >= 0; i--)
-	{
+static int resolve_local(Compiler *compiler, Token *name) {
+	for (int i = compiler->local_count - 1; i >= 0; i--) {
 		Local *current_local = &compiler->locals[i];
 		if (identifier_equal(name, &current_local->name))
 			return i;
@@ -534,8 +513,7 @@ static int resolve_local(Compiler *compiler, Token *name)
 	return -1;
 }
 
-static uint32_t resolve_upvalue(Compiler * compiler,  Token * name)
-{
+static uint32_t resolve_upvalue(Compiler * compiler,  Token * name) {
 	if (compiler->enclosing == NULL)
 		return -1;
 
@@ -558,8 +536,7 @@ static uint32_t resolve_upvalue(Compiler * compiler,  Token * name)
 }
 
 
-static void call()
-{
+static void call() {
 	uint8_t param_count = parameter_list();
 	if (param_count > UINT8_MAX)
 		error(&parser.prev, "Exceed limit of number of parameters.");
@@ -567,40 +544,44 @@ static void call()
 	emit_byte(param_count);
 }
 
-static void assignment()
-{
-	if (parser.prev_prec >= PREC_ASSIGNMENT)
-	{
+static void assignment() {
+	if (parser.prev_prec >= PREC_ASSIGNMENT) {
 		error(&parser.prev, "Invalid assignment.");
 		return;
 	}
 
 	// since the previous identifier is added recently, it lies on top
-	// of the constant pool
+	// of the constant pool.
 	uint32_t iden_offset = current_chunk()->constants.size - 1;
 	Token name = parser.consumed_identifier; // used to resolve variable's name
 
 	parse_precedence(PREC_ASSIGNMENT);
 
-	int stack_index = resolve_local(current, &name);
-	uint32_t upvalue_index = 0;
+	if (!parser.assign_property) {
+		int stack_index = resolve_local(current, &name);
+		uint32_t upvalue_index = 0;
 
-	if (stack_index != -1 && stack_index <= UINT8_MAX)
-		emit_param_inst(OP_SET_LOCAL, stack_index, 1);
-	else if (stack_index != -1)
-		emit_param_inst(OP_SET_LOCAL_LONG, stack_index, LONG_LOCAL_OFFSET_SIZE);
-	else if ((upvalue_index = resolve_upvalue(current, &name)) != -1 && upvalue_index <= UINT8_MAX)
-		emit_param_inst(OP_SET_UPVAL, upvalue_index, 1);
-	else if (upvalue_index != -1)
-		emit_param_inst(OP_SET_UPVAL_LONG, upvalue_index, LONG_UPVAL_OFFSET_SIZE);
-	else if (iden_offset <= UINT8_MAX)
-		emit_param_inst(OP_SET_GLOBAL, iden_offset, 1);
-	else
-		emit_param_inst(OP_SET_GLOBAL_LONG, iden_offset, LONG_CONST_OFFSET_SIZE);
+		if (stack_index != -1 && stack_index <= UINT8_MAX)
+			emit_param_inst(OP_SET_LOCAL, stack_index, 1);
+		else if (stack_index != -1)
+			emit_param_inst(OP_SET_LOCAL_LONG, stack_index, LONG_LOCAL_OFFSET_SIZE);
+		else if ((upvalue_index = resolve_upvalue(current, &name)) != -1 && upvalue_index <= UINT8_MAX)
+			emit_param_inst(OP_SET_UPVAL, upvalue_index, 1);
+		else if (upvalue_index != -1)
+			emit_param_inst(OP_SET_UPVAL_LONG, upvalue_index, LONG_UPVAL_OFFSET_SIZE);
+		else if (iden_offset <= UINT8_MAX)
+			emit_param_inst(OP_SET_GLOBAL, iden_offset, 1);
+		else
+			emit_param_inst(OP_SET_GLOBAL_LONG, iden_offset, LONG_CONST_OFFSET_SIZE);
+	} else {
+		parser.assign_property = false;
+		Opcode inst = (iden_offset <= UINT8_MAX) ? OP_SET_PROPERTY : OP_SET_PROPERTY_LONG;
+		uint32_t iden_offset_size = (iden_offset <= UINT8_MAX) ? 1 : LONG_CONST_OFFSET_SIZE;
+		emit_param_inst(inst, iden_offset, iden_offset_size);
+	}
 }
 
-static void variable()
-{
+static void variable() {
 	parser.consumed_identifier = parser.prev;
 	uint32_t offset = identifier_constant(&parser.prev);
 
@@ -610,7 +591,8 @@ static void variable()
 		return;
 
 	int stack_index = resolve_local(current, &parser.prev);
-	int upvalue_index;
+	int upvalue_index = 0;
+
 	if (stack_index != -1 && stack_index <= UINT8_MAX)
 		emit_param_inst(OP_GET_LOCAL, (uint32_t) stack_index, 1);
 	else if (stack_index != -1)
@@ -662,8 +644,7 @@ static void if_stmt()
 	consume(TK_RIGHT_PAREN, "Expect ')' after condition.");
 	uint32_t jmp_then = emit_jump(OP_JMP_IF_FALSE);
 	stmt();
-	if (match(TK_ELSE))
-	{
+	if (match(TK_ELSE)) {
 		uint32_t jmp_else = emit_jump(OP_JMP);
 		patch_jump(jmp_then);
 		stmt();
@@ -701,14 +682,12 @@ static void or_()
  * <OFFSET>: offset of the string object representing the identifier,
  * takes up three bytes
  * */
-static void var_declaration()
-{
+static void var_declaration() {
 	// parse the identifier and construct a string object (StringObj)
 	// representing the identifier. The object is put in the constant pool.
 	// offset -> offset of the object in the constant pool
 
-	do
-	{
+	do {
 		uint32_t offset = parse_identifier("Expect an identifier.");
 		Token name = parser.consumed_identifier;
 		if (match(TK_EQUAL))
@@ -722,31 +701,25 @@ static void var_declaration()
 	consume(TK_SEMICOLON, "Expect ';' after statement.");
 }
 
-static void begin_scope()
-{
+static void begin_scope() {
 	current->scope_depth++;
 }
 
-static void end_scope()
-{
+static void end_scope() {
 	/** Remove all current scope's local variable representations
 	 *  from @current->locals.
 	 */
 	for (Local *local_it = &current->locals[current->local_count - 1];
-		 local_it >= (struct Local*) &current->locals; local_it--)
-	{
+		 local_it >= (struct Local*) &current->locals; local_it--) {
 		if (local_it->depth != -1 && local_it->depth < current->scope_depth)
 			break;
 		current->local_count--;
 
 		// Local variables are looked up in the virtual machine's stack
 		// so we need to add a pop instruction corresponding to each local variable
-		if (local_it->captured)
-		{
+		if (local_it->captured) {
 			emit_byte(OP_CLOSE_UPVAL);
-		}
-		else
-		{
+		} else {
 			emit_byte(OP_POP);
 		}
 	}
@@ -854,8 +827,7 @@ static void declare_variable(Token name)
 	add_local(name);
 }
 
-static void define_variable(uint32_t offset)
-{
+static void define_variable(uint32_t offset) {
 	if (current->scope_depth > 0)
 		return;
 	if (offset <= UINT8_MAX)
@@ -868,13 +840,13 @@ static void define_variable(uint32_t offset)
  * not an identifier, emit an error message to stderr. Also, add a
  * string object representing the identifier to the constant pool.
  *
- * return value: offset of the identifier in the constant pool */
+ * return value: offset of the identifier in the constant pool
+ * */
 static uint32_t parse_identifier(const char *error_msg)
 {
 	consume(TK_IDENTIFIER, error_msg);
 	parser.consumed_identifier = parser.prev;
-	Value identifier = OBJ_VAL(
-		*StringObj_construct(parser.prev.start, parser.prev.length));
+	Value identifier = OBJ_VAL( *StringObj_construct(parser.prev.start, parser.prev.length));
 	return chunk_add_const(current_chunk(), identifier);
 }
 
@@ -1071,8 +1043,7 @@ static void return_stmt()
 }
 
 // parse statements that are not declaration type
-static void stmt()
-{
+static void stmt() {
 	if (match(TK_PRINT))
 		print_stmt();
 	else if (match(TK_LEFT_BRACE))
@@ -1147,70 +1118,89 @@ static void unary()
 }
 
 /* grouping(): parse the expression between two parentheses */
-static void grouping()
-{
+static void grouping() {
 	expression();
 	consume(TK_RIGHT_PAREN, "Expect ')' after the expression.");
 }
 
 /* binary(): parse the binary operator and the next operand, one at a time */
-static void binary()
-{
+static void binary() {
 	Token op = parser.prev;
 
 	// get the precedence of the consumed operator
 	Precedence op_prec = get_rule(op.type)->prec;
 	parse_precedence(op_prec + 1); // parse the next term
 
-	switch (op.type)
-	{
+	switch (op.type) {
 		/* We use chunk_append here because there are some cases where the operator and
 		 * its operands do not lie on the same line. If an error occurs, we have to report
-		 * the exact line on which a token is */
-
-	case TK_PLUS:
-		chunk_append(current_chunk(), OP_ADD, op.line);
-		break;
-	case TK_MINUS:
-		chunk_append(current_chunk(), OP_SUBTRACT, op.line);
-		break;
-	case TK_STAR:
-		chunk_append(current_chunk(), OP_MUL, op.line);
-		break;
-	case TK_SLASH:
-		chunk_append(current_chunk(), OP_DIV, op.line);
-		break;
-	case TK_LESS:
-		chunk_append(current_chunk(), OP_LESS, op.line);
-		break;
-	case TK_GREATER:
-		chunk_append(current_chunk(), OP_GREATER, op.line);
-		break;
-	case TK_EQUAL_EQUAL:
-		chunk_append(current_chunk(), OP_EQUAL, op.line);
-		break;
-	case TK_LESS_EQUAL:
-		chunk_append(current_chunk(), OP_GREATER, op.line);
-		chunk_append(current_chunk(), OP_NOT, op.line);
-		break;
-	case TK_GREATER_EQUAL:
-		chunk_append(current_chunk(), OP_LESS, op.line);
-		chunk_append(current_chunk(), OP_NOT, op.line);
-		break;
-	case TK_BANG_EQUAL:
-		chunk_append(current_chunk(), OP_EQUAL, op.line);
-		chunk_append(current_chunk(), OP_NOT, op.line);
-		break;
-	default:;
+		 * the exact line on which a token is. */
+		case TK_PLUS:
+			chunk_append(current_chunk(), OP_ADD, op.line);
+			break;
+		case TK_MINUS:
+			chunk_append(current_chunk(), OP_SUBTRACT, op.line);
+			break;
+		case TK_STAR:
+			chunk_append(current_chunk(), OP_MUL, op.line);
+			break;
+		case TK_SLASH:
+			chunk_append(current_chunk(), OP_DIV, op.line);
+			break;
+		case TK_LESS:
+			chunk_append(current_chunk(), OP_LESS, op.line);
+			break;
+		case TK_GREATER:
+			chunk_append(current_chunk(), OP_GREATER, op.line);
+			break;
+		case TK_EQUAL_EQUAL:
+			chunk_append(current_chunk(), OP_EQUAL, op.line);
+			break;
+		case TK_LESS_EQUAL:
+			chunk_append(current_chunk(), OP_GREATER, op.line);
+			chunk_append(current_chunk(), OP_NOT, op.line);
+			break;
+		case TK_GREATER_EQUAL:
+			chunk_append(current_chunk(), OP_LESS, op.line);
+			chunk_append(current_chunk(), OP_NOT, op.line);
+			break;
+		case TK_BANG_EQUAL:
+			chunk_append(current_chunk(), OP_EQUAL, op.line);
+			chunk_append(current_chunk(), OP_NOT, op.line);
+			break;
+		default:;
 	}
 
 	parser.prev_prec = op_prec;
 }
 
+/** dot: Invoke when the parser encounters a dot operator.
+ * If an expression contains a dot operator, it could be either:
+ * - A get-property expression. E.g: object.identifier + 1.
+ * - A set-property expression. E.g: object.identifier = 1.
+ *
+ * After consuming the name of the attribute, the parser will check if the current token is a
+ * TK_EQUAL. If it is, that means the current dot operator is inside a set-property expression, so
+ * the function will stop at TK_EQUAL, set parser.assign_property to true and let the job of parsing
+ * the set-property expression for assignment() function. The assignment() will look at the value of
+ * parser.assign_property to decide whether the OP_SET_PROPERTY should be emitted.
+ * */
+static void dot() {
+	uint32_t iden_offset = parse_identifier("Expect an identifier after '.' operator.");
+
+	if (parser.current.type == TK_EQUAL) {
+		parser.assign_property = true;
+		return;
+	}
+
+	Opcode inst = (iden_offset <= UINT8_MAX) ? OP_GET_PROPERTY : OP_GET_PROPERTY_LONG;
+	uint32_t iden_offset_size = (iden_offset <= UINT8_MAX) ? 1 : LONG_CONST_OFFSET_SIZE;
+	emit_param_inst(inst, iden_offset, iden_offset_size);
+}
+
 // compile: parse the source and emit bytecodes.
 // return value: Closure object that contains the top-level code
-ClosureObj * compile(const char *source)
-{
+ClosureObj * compile(const char *source) {
 	scanner_init(source);
 	parser_init();
 	Compiler compiler;

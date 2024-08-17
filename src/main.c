@@ -18,18 +18,15 @@ int main(int argc, char ** argv)
 {
 	vm_init(argc == 1);
 
-	if (argc == 1)
-	{
+	if (argc == 1) {
 		// go to read-eval-print loop if the user pass no arguments
 		repl();
 	}
-	else if (argc == 2)
-	{
+	else if (argc == 2) {
 		// compile and execute the source program passed by the user
 		run_file(argv[1]);
 	}
-	else
-	{
+	else {
 		fprintf(stderr, "Usage: clox [path]\n");
 		exit(64);
 	}
@@ -37,14 +34,11 @@ int main(int argc, char ** argv)
 	vm_free();
 }
 
-static void repl()
-{
+static void repl() {
 	char code[1024];
-	while (true)
-	{
+	while (true) {
 		printf(">> ");
-		if (!fgets(code, sizeof(code), stdin))
-		{
+		if (!fgets(code, sizeof(code), stdin)) {
 			printf("\n");
 			break;
 		}
@@ -52,8 +46,7 @@ static void repl()
 	}
 }
 
-static void run_file(const char * path)
-{
+static void run_file(const char * path) {
 	char * source = read_file(path);
 	InterpretResult result = interpret(source);
 	free(source);

@@ -6,8 +6,7 @@
 #include "chunk.h"
 #include "object.h"
 
-typedef enum
-{
+typedef enum {
 	// Precedence is declared in order, from the lowest precedence
 	// to the highest precedence
 	PREC_NONE,
@@ -19,6 +18,7 @@ typedef enum
 	PREC_TERM,
 	PREC_FACTOR,
 	PREC_UNARY,
+	PREC_DOT,
 	PREC_CALL,
 	PREC_PRIMARY,		// highest precedence
 }

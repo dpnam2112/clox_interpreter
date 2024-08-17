@@ -50,8 +50,7 @@ void value_arr_append(ValueArr * vl_arr, Value val)
 
 void print_value(Value val)
 {
-	switch (val.type)
-	{
+	switch (val.type) {
 		case VAL_BOOL:	printf((AS_BOOL(val)) ? "true" : "false"); break;
 		case VAL_NIL: 	printf("nil"); break;
 		case VAL_OBJ:	print_object(val); break;

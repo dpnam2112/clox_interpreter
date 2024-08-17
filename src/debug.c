@@ -1,33 +1,30 @@
 #include "debug.h"
 #include "chunk.h"
 #include "object.h"
+#include "value.h"
 
 size_t current_line;
 bool line_change;
 
-void disassemble_chunk(Chunk * chunk, const char * name)
-{
+void disassemble_chunk(Chunk * chunk, const char * name) {
 	// Initialize bytecode logger's state
 	current_line = 0;
 	line_change = false;
 
 	printf("== %s ==\n", name);
-	for (size_t offset = 0; offset < chunk->size;)
-	{
+	for (size_t offset = 0; offset < chunk->size;) {
 		offset = disassemble_inst(chunk, offset);
 	}
 }
 
 // simple_instruction: print out the instruction opcode and return 
 // the offset of the next one.
-int simple_instruction(const char * name, int offset)
-{
+int simple_instruction(const char * name, int offset) {
 	printf("%s\n", name);
 	return offset + 1;
 }
 
-int const_instruction(const char * name, Chunk * chunk, int offset)
-{
+int const_instruction(const char * name, Chunk * chunk, int offset) {
 	// offset of the constant value in chunk->values
 	uint8_t const_offset = chunk->bytecodes[offset + 1];
 	printf("%-16s %4d ", name, const_offset);
@@ -35,6 +32,14 @@ int const_instruction(const char * name, Chunk * chunk, int offset)
 	Value const_value = chunk->constants.values[const_offset];
 	print_value(const_value);
 
+	printf("\n");
+	return offset + 2;
+}
+
+int call_instruction(const char * name, Chunk * chunk, int offset) {
+	// offset of the constant value in chunk->values
+	uint8_t const_offset = chunk->bytecodes[offset + 1];
+	printf("%-16s %4d", name, const_offset);
 	printf("\n");
 	return offset + 2;
 }
@@ -53,12 +58,10 @@ int const_long_instruction(const char * name, Chunk * chunk, int offset)
 	return offset + 4;
 }
 
-int upval_instruction(const char * name, Chunk * chunk, int offset)
-{
+int upval_instruction(const char * name, Chunk * chunk, int offset) {
 	Opcode opcode = chunk->bytecodes[offset];
 	uint32_t upval_offset = 0;
-	if (opcode == OP_GET_UPVAL_LONG || opcode == OP_SET_UPVAL_LONG)
-	{
+	if (opcode == OP_GET_UPVAL_LONG || opcode == OP_SET_UPVAL_LONG) {
 		memcpy(&upval_offset, &(chunk->bytecodes[offset + 1]), LONG_UPVAL_OFFSET_SIZE);
 		printf("%-16s %4d '", name, upval_offset);
 		printf("'\n");
@@ -71,8 +74,7 @@ int upval_instruction(const char * name, Chunk * chunk, int offset)
 	return offset + 2;
 }
 
-int jump_instruction(const char * name, Chunk * chunk, int offset)
-{
+int jump_instruction(const char * name, Chunk * chunk, int offset) {
 	uint16_t jmp_dist = *((uint16_t *) &(chunk->bytecodes[offset + 1]));
 	uint32_t jmp_start = offset + 3;
 	uint32_t jmp_dest = jmp_start + jmp_dist;
@@ -80,8 +82,7 @@ int jump_instruction(const char * name, Chunk * chunk, int offset)
 	return offset + 3;
 }
 
-int loop_instruction(const char * name, Chunk * chunk, int offset)
-{
+int loop_instruction(const char * name, Chunk * chunk, int offset) {
 	uint16_t jmp_dist = *((uint16_t *) &(chunk->bytecodes[offset + 1]));
 	uint32_t jmp_start = offset + 3;
 	uint32_t jmp_dest = jmp_start - jmp_dist;
@@ -98,8 +99,7 @@ int loop_instruction(const char * name, Chunk * chunk, int offset)
 //	printf("%-16s %-4d")
 //}
 
-int line_number(Chunk * chunk, int offset)
-{
+int line_number(Chunk * chunk, int offset) {
 	uint16_t line;
 	memcpy(&line, &(chunk->bytecodes[offset + 1]), 2);
 	printf("%-16s\n", "META_LINE_NUM");
@@ -109,8 +109,7 @@ int line_number(Chunk * chunk, int offset)
 	return offset + 3;
 }
 
-int disassemble_inst(Chunk *chunk, size_t offset)
-{
+int disassemble_inst(Chunk *chunk, size_t offset) {
 	printf("%04lu ", offset);
 	Opcode inst = chunk->bytecodes[offset];	// Get the instruction
 	size_t inst_line = chunk_get_line(chunk, offset);
@@ -122,8 +121,7 @@ int disassemble_inst(Chunk *chunk, size_t offset)
 	else
 		printf("  | ");
 
-	switch (inst)
-	{
+	switch (inst) {
 		case OP_RETURN:
 			return simple_instruction("OP_RETURN", offset);
 		case OP_CONST:
@@ -171,7 +169,6 @@ int disassemble_inst(Chunk *chunk, size_t offset)
 		case OP_SET_LOCAL:
 			return const_instruction("OP_SET_LOCAL", chunk, offset);
 		case OP_GET_UPVAL:
-			return upval_instruction("OP_GET_UPVAL", chunk, offset);
 		case OP_SET_UPVAL:
 			return upval_instruction("OP_SET_UPVAL", chunk, offset);
 		case OP_JMP:
@@ -181,9 +178,8 @@ int disassemble_inst(Chunk *chunk, size_t offset)
 		case OP_LOOP:
 			return loop_instruction("OP_LOOP", chunk, offset);
 		case OP_CALL:
-			return const_instruction("OP_CALL", chunk, offset);
-		case OP_CLOSURE:
-		{
+			return call_instruction("OP_CALL", chunk, offset);
+		case OP_CLOSURE: {
 			offset++;
 			uint8_t constant_offset = chunk->bytecodes[offset++];
 			printf("%-16s %4d ", "OP_CLOSURE", constant_offset);
@@ -191,15 +187,13 @@ int disassemble_inst(Chunk *chunk, size_t offset)
 			printf("\n");
 		
 			ClosureObj * closure = AS_CLOSURE(chunk->constants.values[constant_offset]);
-			for (int i = 0; i < closure->function->upval_count; i++)
-			{
+			for (int i = 0; i < closure->function->upval_count; i++) {
 				uint8_t upval_info = chunk->bytecodes[offset++];
 				bool local = upval_info & 1;
 				bool long_offset = (upval_info & (1 << 1)) >> 1;
 
 				uint32_t upval_index = 0;
-				if (long_offset)
-				{
+				if (long_offset) {
 					memcpy(&upval_index, &chunk->bytecodes[offset], 2);
 					offset += 2;
 				}
@@ -219,6 +213,14 @@ int disassemble_inst(Chunk *chunk, size_t offset)
 			return const_instruction("OP_CLASS", chunk, offset);
 		case OP_CLASS_LONG:
 			return const_long_instruction("OP_CLASS_LONG", chunk, offset);
+		case OP_GET_PROPERTY:
+			return const_instruction("OP_GET_PROPERTY", chunk, offset);
+		case OP_GET_PROPERTY_LONG:
+			return const_long_instruction("OP_GET_PROPERTY_LONG", chunk, offset);
+		case OP_SET_PROPERTY:
+			return const_instruction("OP_SET_PROPERTY", chunk, offset);
+		case OP_SET_PROPERTY_LONG:
+			return const_long_instruction("OP_SET_PROPERTY_LONG", chunk, offset);
 		case OP_EXIT:
 			return simple_instruction("OP_EXIT", offset);
 		default:
