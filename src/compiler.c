@@ -727,11 +727,9 @@ static void end_scope() {
 	current->scope_depth--;
 }
 
-static uint8_t parameter_list()
-{
+static uint8_t parameter_list() {
 	uint8_t param_count = 0;
-	if (!check(TK_RIGHT_PAREN))
-	{
+	if (!check(TK_RIGHT_PAREN)) {
 		do {
 			expression();
 			param_count++;
@@ -743,18 +741,15 @@ static uint8_t parameter_list()
 }
 
 
-static void function(FunctionType type)
-{
+static void function(FunctionType type) {
 	Compiler compiler;
 	compiler_init(&compiler, type);
 	begin_scope();
 
 	consume(TK_LEFT_PAREN, "Expect '(' after function name.");
 	uint8_t param_count = 0;
-	if (!check(TK_RIGHT_PAREN))
-	{
-		do
-		{
+	if (!check(TK_RIGHT_PAREN)) {
+		do {
 			if (param_count == UINT8_MAX)
 				error(&parser.prev, "Exceed limit of number of parameters.");
 			uint32_t name = parse_identifier("Expect parameter's name.");

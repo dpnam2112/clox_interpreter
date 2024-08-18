@@ -20,8 +20,7 @@ inline void vm_stack_push(Value value) {
 	*(vm.stack_top++) = value;
 }
 
-Value vm_stack_pop()
-{
+Value vm_stack_pop() {
 	if (vm.stack_top == vm.stack)
 	{
 		printf("[memory error] pop empty stack.");
@@ -114,8 +113,7 @@ static bool is_falsey(Value val)
 /** Concatenate two strings that are on top of the stack.
  *  The result of the concatenation is pushed back into the stack.
  * */
-static void concatenate()
-{
+static void concatenate() {
 	StringObj * right = AS_STRING(vm_stack_peek(0));
 	StringObj * left = AS_STRING(vm_stack_peek(1));
 
@@ -136,8 +134,7 @@ static void concatenate()
 }
 
 /* runtime_error: print out error message to stderr and reset the stack */
-static void runtime_error(const char * format, ...)
-{
+static void runtime_error(const char * format, ...) {
 	va_list args;
 	va_start(args, format);
 	vfprintf(stderr, format, args);
@@ -149,8 +146,7 @@ static void runtime_error(const char * format, ...)
 	// line [i2], in a2()
 	// ...
 	// line [iN], in script
-	for (CallFrame * frame = &vm.frames[vm.frame_count - 1]; frame >= vm.frames; frame--)
-	{
+	for (CallFrame * frame = &vm.frames[vm.frame_count - 1]; frame >= vm.frames; frame--) {
 		FunctionObj * function = frame->closure->function;
 		int inst_offset = frame->pc - function->chunk.bytecodes;
 		int line = chunk_get_line(&function->chunk, inst_offset);
@@ -174,8 +170,7 @@ static void runtime_error(const char * format, ...)
  *
  * @param byte_count does not exceed 4. If it does, it will be changed to 4.
  * return value: positive integer value */
-static uint32_t read_bytes(uint8_t ** pc, uint8_t byte_count)
-{
+static uint32_t read_bytes(uint8_t ** pc, uint8_t byte_count) {
 	if (byte_count > 4) byte_count = 4;
 	uint32_t bytes = 0;
 	memcpy(&bytes, *pc, byte_count);
@@ -211,6 +206,7 @@ bool call_value(Value value, int param_count) {
 		new_frame->slots = vm.stack_top - param_count - 1;
 	} else if (IS_CLASS_OBJ(value)) {
 		ClassObj* class_obj = AS_CLASS(value);
+		vm_stack_pop(); // Pop the class object.
 		InstanceObj* new_instance = InstanceObj_construct(class_obj);
 		vm_stack_push(OBJ_VAL(*new_instance));
 	}
@@ -586,8 +582,58 @@ do {\
 			vm_stack_push(OBJ_VAL(*new_class));
 			break;
 		}
-		case OP_GET_PROPERTY: {
-
+		case OP_GET_PROPERTY:
+		case OP_GET_PROPERTY_LONG: {
+			/** Get a property from the top object in the stack. After the operation is
+			 * completed, the instance will be popped from the stack and the property
+			 * value of the instance will be pushed into the stack.
+			 * ============= Bytecode Format ============= 
+			 * OP_GET_PROPERTY     	<1-byte offset>
+			 * OP_GET_PROPERTY_LONG <3-byte offset>
+			 * ===========================================
+			 * <offset>: Offset of the string representing the property's name in the
+			 * value array.
+			 * */
+			Value property_name_val = (inst == OP_GET_PROPERTY) ? READ_CONST() : READ_CONST_LONG();
+			InstanceObj* instance = AS_INSTANCE(vm_stack_peek(0));
+			Value property;
+			bool exist = table_get(&instance->fields, AS_STRING(property_name_val), &property);
+			if (!exist) {
+				StringObj* class_name = instance->klass->name;
+				runtime_error("'%s' object has no property '%s'.", class_name->chars, AS_CSTRING(property_name_val));
+				return INTERPRET_RUNTIME_ERROR;
+			}
+			vm_stack_pop(); // Pop the class instance.
+			vm_stack_push(property);
+			break;
+		}
+		case OP_SET_PROPERTY:
+		case OP_SET_PROPERTY_LONG: {
+			/** Stack's precondition:
+			 * == Stack == 
+			 * ... <class instance> <value>
+			 * ===========
+			 *
+			 * Stack's postcondition:
+			 * == Stack ==
+			 * ...
+			 * ===========
+			 *
+			 * Set the property of the class instance to value <value>.
+			 * == Bytecode format ==
+			 * OP_SET_PROPERTY <offset>
+			 * =====================
+			 * @param <offset> the offset of the StringObj representing the property's
+			 * name in the value array.
+			 * */
+			Value property_name_val = (inst == OP_SET_PROPERTY) ? READ_CONST() : READ_CONST_LONG();
+			Value rhs_value = vm_stack_peek(0);
+			InstanceObj* instance = AS_INSTANCE(vm_stack_peek(1));
+			bool success = table_set(&(instance->fields), AS_STRING(property_name_val), rhs_value);
+			rhs_value = vm_stack_pop();
+			vm_stack_pop();
+			vm_stack_push(rhs_value);
+			break;
 		}
 	}
 }

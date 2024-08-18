@@ -133,4 +133,8 @@ void print_object(Value);
 uint32_t hash_string(const char *, int);
 
 void* allocate_object(size_t size, ObjType type);
+
+/** Object's specific supporting functions. */
+Value InstanceObj_get_property(InstanceObj* instance, StringObj* property_name);
+
 #endif

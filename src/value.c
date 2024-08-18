@@ -112,7 +112,7 @@ bool callable(Value val)
 		case OBJ_NATIVE_FN:
 		case OBJ_CLASS:
 			return true;
+		default:
+			return false;
 	}
-
-	return false;
 }

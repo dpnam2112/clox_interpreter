@@ -2,6 +2,7 @@
 #include "chunk.h"
 #include "object.h"
 #include "value.h"
+#include <string.h>
 
 size_t current_line;
 bool line_change;
@@ -34,6 +35,15 @@ int const_instruction(const char * name, Chunk * chunk, int offset) {
 
 	printf("\n");
 	return offset + 2;
+}
+
+int single_param_inst(const char* name, Chunk* chunk, int offset, size_t param_size) {
+	// offset of the constant value in chunk->values
+	size_t param = 0;
+	memcpy(&param, &(chunk->bytecodes[offset + 1]), param_size);
+	printf("%-16s %4zu", name, param);
+	printf("\n");
+	return offset + param_size + 1;
 }
 
 int call_instruction(const char * name, Chunk * chunk, int offset) {
@@ -165,9 +175,9 @@ int disassemble_inst(Chunk *chunk, size_t offset) {
 		case OP_SET_GLOBAL:
 			return const_instruction("OP_SET_GLOBAL", chunk, offset);
 		case OP_GET_LOCAL:
-			return const_instruction("OP_GET_LOCAL", chunk, offset);
+			return single_param_inst("OP_GET_LOCAL", chunk, offset, 1);
 		case OP_SET_LOCAL:
-			return const_instruction("OP_SET_LOCAL", chunk, offset);
+			return single_param_inst("OP_SET_LOCAL", chunk, offset, 1);
 		case OP_GET_UPVAL:
 		case OP_SET_UPVAL:
 			return upval_instruction("OP_SET_UPVAL", chunk, offset);
