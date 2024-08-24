@@ -17,7 +17,7 @@ typedef struct IntArr {
 typedef struct Parser {
 	Token prev;
 	Token current;
-	Token consumed_identifier; 	// identifier that is consumed recently
+	Token consumed_identifier; 	// the previously consumed identifier.
 	bool error;			// was there any parse error occured?
 	bool panic;			// should the parser enter panic mode?
 	bool assign_property;		// should the parser emit OP_SET_PROPERTY? (Take a look at
@@ -555,9 +555,11 @@ static void assignment() {
 	uint32_t iden_offset = current_chunk()->constants.size - 1;
 	Token name = parser.consumed_identifier; // used to resolve variable's name
 
+	bool assign_property = parser.assign_property;
+
 	parse_precedence(PREC_ASSIGNMENT);
 
-	if (!parser.assign_property) {
+	if (!assign_property) {
 		int stack_index = resolve_local(current, &name);
 		uint32_t upvalue_index = 0;
 
@@ -1176,8 +1178,8 @@ static void binary() {
  *
  * After consuming the name of the attribute, the parser will check if the current token is a
  * TK_EQUAL. If it is, that means the current dot operator is inside a set-property expression, so
- * the function will stop at TK_EQUAL, set parser.assign_property to true and let the job of parsing
- * the set-property expression for assignment() function. The assignment() will look at the value of
+ * the function will stop at TK_EQUAL, set parser.assign_property to true and let the job of
+ * emitting OP_SET_PROPERTY for assignment() function. The assignment() will look at the value of
  * parser.assign_property to decide whether the OP_SET_PROPERTY should be emitted.
  * */
 static void dot() {

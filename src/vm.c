@@ -5,6 +5,7 @@
 #include "compiler.h"
 #include "object.h"
 #include "table.h"
+#include "native_fns.h"
 #include <assert.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -21,8 +22,7 @@ inline void vm_stack_push(Value value) {
 }
 
 Value vm_stack_pop() {
-	if (vm.stack_top == vm.stack)
-	{
+	if (vm.stack_top == vm.stack) {
 		printf("[memory error] pop empty stack.");
 		exit(1);
 	}
@@ -30,18 +30,15 @@ Value vm_stack_pop() {
 	return *(--vm.stack_top);
 }
 
-int vm_stack_size()
-{
+int vm_stack_size() {
 	return vm.stack_top - vm.stack;
 }
 
-static Value vm_stack_peek(int distance)
-{
+static Value vm_stack_peek(int distance) {
 	return vm.stack_top[-1 - distance];	// ??
 }
 
-static Value clock_native(int param_count, Value * params)
-{
+static Value clock_native(int param_count, Value * params) {
 	return NUMBER_VAL((double) clock() / CLOCKS_PER_SEC);
 }
 
@@ -71,6 +68,7 @@ void vm_init(bool repl)
 	vm.gc.threshold = 2 << 8;
 
 	define_native_fn("clock", clock_native);
+	define_native_fn("hasattr", native_fn_has_attribute);
 }
 
 
@@ -209,6 +207,11 @@ bool call_value(Value value, int param_count) {
 		vm_stack_pop(); // Pop the class object.
 		InstanceObj* new_instance = InstanceObj_construct(class_obj);
 		vm_stack_push(OBJ_VAL(*new_instance));
+	} else if (IS_NATIVE_FN_OBJ(value)) {
+		NativeFn nav_fn = AS_NATIVE_FN(value);
+		Value res = nav_fn(param_count, vm.stack_top - param_count);
+		vm.stack_top -= param_count + 1;
+		vm_stack_push(res);
 	}
 
 	return true;
@@ -511,14 +514,6 @@ do {\
 			uint8_t param_count = READ_BYTE();
 			Value called_obj = vm_stack_peek(param_count);
 
-			if (IS_NATIVE_FN_OBJ(called_obj)) {
-				NativeFn nav_fn = AS_NATIVE_FN(called_obj);
-				Value res = nav_fn(param_count, vm.stack_top - param_count);
-				vm.stack_top -= param_count + 1;
-				vm_stack_push(res);
-				break;
-			}
-			
 			if (!callable(called_obj)) {
 				runtime_error("object is not callable.");
 				return INTERPRET_RUNTIME_ERROR;
