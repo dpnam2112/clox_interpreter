@@ -9,7 +9,7 @@ static inline bool is_digit(const char c)
 
 static inline bool is_alpha(const char c)
 {
-	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z';
+	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
 void scanner_init(const char * source)
@@ -85,6 +85,8 @@ static void skip_insig_chars(Token * error)
 		{
 		case '\n':
 			scanner.line++;
+            advance();
+            break;
 		case '\t':
 		case ' ':
 		case '\r':

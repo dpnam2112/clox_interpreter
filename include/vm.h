@@ -1,9 +1,7 @@
 #ifndef VM_H
 #define VM_H
 
-#include "common.h"
 #include "chunk.h"
-#include "debug.h"
 #include "value.h"
 #include "table.h"
 #include "object.h"
@@ -13,9 +11,9 @@
 
 typedef struct
 {
-	ClosureObj * closure;
-	uint8_t * pc;
-	Value * slots;	// kind of a stack pointer
+	ClosureObj *closure;
+	uint8_t *pc;
+	Value *slots;	// kind of a stack pointer
 } CallFrame;
 
 /** VM: object that belongs to this struct represent the virtual machine

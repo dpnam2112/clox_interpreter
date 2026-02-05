@@ -1,9 +1,6 @@
 #ifndef COMPILER_H
 #define COMPILER_H
 
-#include "common.h"
-#include "scanner.h"
-#include "chunk.h"
 #include "object.h"
 
 typedef enum {

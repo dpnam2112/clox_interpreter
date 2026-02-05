@@ -8,6 +8,7 @@
 #include "native_fns.h"
 #include <assert.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -38,7 +39,11 @@ static Value vm_stack_peek(int distance) {
 	return vm.stack_top[-1 - distance];	// ??
 }
 
-static Value clock_native(int param_count, Value * params) {
+static Value clock_native(int param_count, Value *params) {
+    assert(param_count >= 0);
+    if (param_count == 0) {
+        assert(params == NULL);
+    }
 	return NUMBER_VAL((double) clock() / CLOCKS_PER_SEC);
 }
 
@@ -177,8 +182,6 @@ static uint32_t read_bytes(uint8_t ** pc, uint8_t byte_count) {
 }
 
 bool call_value(Value value, int param_count) {
-	Obj* obj = AS_OBJ(value);
-
 	if (!callable(value)) {
 		return false;
 	}
@@ -197,19 +200,22 @@ bool call_value(Value value, int param_count) {
 			return false;
 		}
 
-		CallFrame * new_frame = &vm.frames[vm.frame_count++];
-
+		CallFrame *new_frame = &vm.frames[vm.frame_count++];
 		new_frame->closure = closure;
 		new_frame->pc = closure->function->chunk.bytecodes;
 		new_frame->slots = vm.stack_top - param_count - 1;
 	} else if (IS_CLASS_OBJ(value)) {
-		ClassObj* class_obj = AS_CLASS(value);
-		vm_stack_pop(); // Pop the class object.
-		InstanceObj* new_instance = InstanceObj_construct(class_obj);
+		ClassObj *class_obj = AS_CLASS(value);
+		InstanceObj *new_instance = InstanceObj_construct(class_obj);
 		vm_stack_push(OBJ_VAL(*new_instance));
 	} else if (IS_NATIVE_FN_OBJ(value)) {
-		NativeFn nav_fn = AS_NATIVE_FN(value);
-		Value res = nav_fn(param_count, vm.stack_top - param_count);
+		NativeFn native_fn = AS_NATIVE_FN(value);
+        Value res;
+        if (param_count > 0){
+            res = native_fn(param_count, vm.stack_top - param_count);
+        } else {
+            res = native_fn(0, NULL);
+        }
 		vm.stack_top -= param_count + 1;
 		vm_stack_push(res);
 	}
@@ -217,34 +223,13 @@ bool call_value(Value value, int param_count) {
 	return true;
 }
 
-// @call: Load the closure object @closure to the vm's frame
-bool call_closure(ClosureObj* closure, int param_count) {
-	// Check number of parameters
-	if (param_count != closure->function->arity) {
-		runtime_error("Expect %d parameters but got %d.", closure->function->arity, param_count);
-		return false;
-	}
-
-	// Check if the frame stack is overflow
-	if (vm.frame_count >= CALL_FRAME_MAX) {
-		runtime_error("Stack overflow.");
-		return false;
-	}
-
-	CallFrame * new_frame = &vm.frames[vm.frame_count++];
-
-	new_frame->closure = closure;
-	new_frame->pc = closure->function->chunk.bytecodes;
-	new_frame->slots = vm.stack_top - param_count - 1;
-
-	return true;
-}
-
 bool call_class_constructor(ClassObj* class_obj, int param_count) {
-      InstanceObj* new_instance = InstanceObj_construct(class_obj);
-      Value wrapper = OBJ_VAL(*new_instance);
-      vm_stack_push(wrapper);
-      return true;
+    assert(param_count == 0);
+	vm_stack_pop(); // Pop the class object.
+    InstanceObj* new_instance = InstanceObj_construct(class_obj);
+    Value val = OBJ_VAL(*new_instance);
+    vm_stack_push(val);
+    return true;
 }
 
 /** @capture_upval: Create an upvalue object that references to @value
@@ -260,25 +245,21 @@ static UpvalueObj * capture_upval(Value * value) {
 	// An upvalue object that references to @value is found
 
 	UpvalueObj *prev = NULL, *current = vm.open_upvalues; 
-	while (current != NULL && value < current->value)
-	{
+	while (current != NULL && value < current->value) {
 		prev = current;
 		current = current->next;
 	}
 
-	if (current != NULL && value == current->value)
-	{
+	if (current != NULL && value == current->value) {
 		return current;
 	}
 
 	UpvalueObj * new_upvalue = UpvalueObj_construct(value);
-	if (prev != NULL)
-	{
+	if (prev != NULL) {
 		new_upvalue->next = prev->next;
 		prev->next = new_upvalue;
 	}
-	else
-	{
+	else {
 		vm.open_upvalues = new_upvalue;
 	}
 
@@ -296,8 +277,7 @@ static UpvalueObj * capture_upval(Value * value) {
  */
 static void close_upvalues(Value * last)
 {
-	while (vm.open_upvalues != NULL && vm.open_upvalues->value >= last)
-	{
+	while (vm.open_upvalues != NULL && vm.open_upvalues->value >= last) {
 		UpvalueObj * closed_upval = vm.open_upvalues;
 		closed_upval->cloned = *(closed_upval->value);
 		closed_upval->value = &closed_upval->cloned;
@@ -312,7 +292,7 @@ static InterpretResult run()
 	CallFrame * frame = &vm.frames[vm.frame_count - 1];
 
 #define READ_BYTE() *(frame->pc++)
-#define READ_SHORT() (frame->pc += 2, *((uint16_t *) (frame->pc - 2)))
+#define READ_SHORT() (frame->pc += 2, *((uint16_t*) (frame->pc - 2)))
 #define READ_BYTES(n) read_bytes(&(frame->pc), n)
 #define READ_CONST() frame->closure->function->chunk.constants.values[READ_BYTE()]
 #define READ_CONST_LONG() frame->closure->function->chunk.constants.values[READ_BYTES(LONG_CONST_OFFSET_SIZE)]
@@ -624,7 +604,9 @@ do {\
 			Value property_name_val = (inst == OP_SET_PROPERTY) ? READ_CONST() : READ_CONST_LONG();
 			Value rhs_value = vm_stack_peek(0);
 			InstanceObj* instance = AS_INSTANCE(vm_stack_peek(1));
-			bool success = table_set(&(instance->fields), AS_STRING(property_name_val), rhs_value);
+			if(!table_set(&(instance->fields), AS_STRING(property_name_val), rhs_value)){
+                runtime_error("OP_SET_PROPERTY_LONG failed.");
+            }
 			rhs_value = vm_stack_pop();
 			vm_stack_pop();
 			vm_stack_push(rhs_value);
