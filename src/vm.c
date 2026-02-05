@@ -207,6 +207,7 @@ bool call_value(Value value, int param_count) {
 	} else if (IS_CLASS_OBJ(value)) {
 		ClassObj *class_obj = AS_CLASS(value);
 		InstanceObj *new_instance = InstanceObj_construct(class_obj);
+		vm.stack_top -= 1;
 		vm_stack_push(OBJ_VAL(*new_instance));
 	} else if (IS_NATIVE_FN_OBJ(value)) {
 		NativeFn native_fn = AS_NATIVE_FN(value);
