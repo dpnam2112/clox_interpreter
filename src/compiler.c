@@ -6,6 +6,7 @@
 #include "value.h"
 #include "object.h"
 #include "memory.h"
+#include <stdint.h>
 #include <stdlib.h>
 
 typedef struct IntArr {
@@ -49,10 +50,12 @@ typedef enum FunctionType
  * @index: index of the variable in the enclosing function's stack array
  * @local: indicate whether the upvalue refer to an object belonging to the enclosing closure/function
  * @long_offset: indicate whether the @index is one-byte long (i.e, 0 <= @index <= UINT8_MAX).
+ *
+ * TODO: Increase upvalue limit (MAX_UPVALUE)
  */
 typedef struct Upvalue
 {
-	uint32_t index;
+	int index;
 	bool local;
 	bool long_offset;
 }
@@ -74,12 +77,12 @@ typedef struct Compiler
 
 	// This field (@locals) is used to resolve variables
 	// inside scopes.
-	Local locals[UINT8_MAX];
+	Local locals[MAX_LOCALVAR];
 	int local_count;
 	int scope_depth;
 
-	Upvalue upvalues[UINT8_MAX];
-	uint8_t upval_count;
+	Upvalue upvalues[MAX_UPVALUE];
+	int upval_count;
 } Compiler;
 
 Parser parser;
@@ -153,24 +156,22 @@ static void add_local(Token name)
  * @param local: indicate whether the value referenced is inside stack or another function's upvalue array
  * @return: index of the added upvalue
  */
-static uint32_t add_upvalue(Compiler * compiler, int index, bool local)
+static int add_upvalue(Compiler * compiler, int index, bool local)
 {
 	int upval_count = compiler->upval_count;
 
-	if (upval_count > 1 << 2 * sizeof(uint8_t))
-	{
+    // TODO: Add support for bigger number of upvalues
+	if (upval_count >= MAX_UPVALUE) {
 		error(&parser.prev, "[Memory error] Too many upvalues.");
 		return upval_count;
 	}
 
-	for (int i = upval_count - 1; i >= 0; i--)
-	{
+	for (int i = upval_count - 1; i >= 0; i--) {
 		if (compiler->upvalues[i].index == index && compiler->upvalues[i].local == local)
 			return i;
 	}
 
-	bool long_offset = (compiler->upval_count > UINT8_MAX);
-	compiler->upvalues[compiler->upval_count] = (Upvalue) { index, local, long_offset };
+	compiler->upvalues[compiler->upval_count] = (Upvalue) { index, local, false };
 	return compiler->upval_count++;
 }
 
@@ -238,7 +239,8 @@ static void emit_bytes(void *bytes, uint8_t byte_count)
 }
 
 /** @emit_param_inst: write instruction that has one parameter
- * (OP_CONST, OP_CONST_LONG...) */
+ * (OP_CONST, OP_CONST_LONG...)
+ * */
 static void emit_param_inst(Opcode opcode, uint32_t param, uint8_t param_sz)
 {
 	emit_byte(opcode);
@@ -400,7 +402,7 @@ static void break_stmt();
 static uint32_t parse_identifier(const char *error_msg);
 static void declare_variable(Token name);
 static void define_variable(uint32_t offset);
-static uint8_t parameter_list();
+static int parameter_list();
 static void and_();
 static void or_();
 static void call();
@@ -513,7 +515,7 @@ static int resolve_local(Compiler *compiler, Token *name) {
 	return -1;
 }
 
-static uint32_t resolve_upvalue(Compiler * compiler,  Token * name) {
+static int resolve_upvalue(Compiler *compiler,  Token *name) {
 	if (compiler->enclosing == NULL)
 		return -1;
 
@@ -529,7 +531,7 @@ static uint32_t resolve_upvalue(Compiler * compiler,  Token * name) {
 		return add_upvalue(compiler, enclosing_local, true);
 	}
 
-	uint32_t enclosing_upval = resolve_upvalue(compiler->enclosing, name);
+	int enclosing_upval = resolve_upvalue(compiler->enclosing, name);
 	if (enclosing_upval != -1)
 		return add_upvalue(compiler, enclosing_upval, false);
 	return -1;
@@ -537,9 +539,10 @@ static uint32_t resolve_upvalue(Compiler * compiler,  Token * name) {
 
 
 static void call() {
-	uint8_t param_count = parameter_list();
-	if (param_count > UINT8_MAX)
-		error(&parser.prev, "Exceed limit of number of parameters.");
+	int param_count = parameter_list();
+	if (param_count >= MAX_CALLARGS) {
+		error(&parser.prev, "Exceed limit of number of arguments.");
+    }
 	emit_byte(OP_CALL);
 	emit_byte(param_count);
 }
@@ -561,7 +564,7 @@ static void assignment() {
 
 	if (!assign_property) {
 		int stack_index = resolve_local(current, &name);
-		uint32_t upvalue_index = 0;
+		int upvalue_index = 0;
 
 		if (stack_index != -1 && stack_index <= UINT8_MAX)
 			emit_param_inst(OP_SET_LOCAL, stack_index, 1);
@@ -583,7 +586,8 @@ static void assignment() {
 	}
 }
 
-static void variable() {
+static void variable()
+{
 	parser.consumed_identifier = parser.prev;
 	uint32_t offset = identifier_constant(&parser.prev);
 
@@ -630,8 +634,7 @@ static uint16_t patch_jump(uint32_t jmp_param_pos)
 	uint32_t jump_pos = jmp_param_pos + 2;
 	uint32_t dest = current_chunk()->size;
 	uint32_t jump_dist = dest - jump_pos;
-	if (jump_dist >= UINT16_MAX)
-	{
+	if (jump_dist >= UINT16_MAX) {
 		error(&parser.prev, "Too much bytecodes to jump.");
 		return 0;
 	}
@@ -729,8 +732,8 @@ static void end_scope() {
 	current->scope_depth--;
 }
 
-static uint8_t parameter_list() {
-	uint8_t param_count = 0;
+static int parameter_list() {
+	int param_count = 0;
 	if (!check(TK_RIGHT_PAREN)) {
 		do {
 			expression();
@@ -806,17 +809,13 @@ static void declare_variable(Token name)
 {
 	if (current->scope_depth == 0)
 		return;
-	for (Local * local_it = &current->locals[current->local_count - 1];
-		 local_it >= (struct Local*) &current->locals; local_it--)
-	{
-		if (local_it->depth != -1 && local_it->depth < current->scope_depth)
-		{
+	for (Local *local_it = &current->locals[current->local_count - 1]; local_it >= (struct Local*) &current->locals; local_it--) {
+		if (local_it->depth != -1 && local_it->depth < current->scope_depth) {
 			// does the iterator go 'outside' of the current scope?
 			break;
 		}
 
-		if (identifier_equal(&name, &local_it->name))
-		{
+		if (identifier_equal(&name, &local_it->name)) {
 			error(&name, "Redeclare variable inside scope.");
 			return;
 		}
@@ -865,8 +864,7 @@ static void expression_stmt()
 static void block_stmt()
 {
 	begin_scope();
-	while (!(check(TK_RIGHT_BRACE) || check(TK_EOF)))
-	{
+	while (!(check(TK_RIGHT_BRACE) || check(TK_EOF))) {
 		declaration();
 	}
 
@@ -876,8 +874,7 @@ static void block_stmt()
 
 static void break_stmt()
 {
-	if (parser.breaks == NULL)
-	{
+	if (parser.breaks == NULL) {
 		// parser is not inside of a loop
 		error(&parser.prev, "use of 'break' outside loop.");
 		consume(TK_SEMICOLON, "Expect ';' after 'break'.");
@@ -1026,8 +1023,7 @@ static void for_stmt()
 
 static void return_stmt()
 {
-	if (current->enclosing == NULL)
-	{
+	if (current->enclosing == NULL) {
 		error(&parser.prev, "'return' outside function.");
 	}
 
@@ -1061,8 +1057,9 @@ static void stmt() {
 		expression_stmt();
 }
 
-/* number: take the consumed token (@parser.prev) and 'transform' it into
- * a constant-load instruction */
+/** number: take the consumed token (@parser.prev) and 'transform' it into
+ * a constant-load instruction
+ * */
 static void number()
 {
 	double literal = strtod(parser.prev.start, NULL);

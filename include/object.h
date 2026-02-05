@@ -1,7 +1,6 @@
 #ifndef OBJECT_H
 #define OBJECT_H
 
-#include "common.h"
 #include "table.h"
 #include "value.h"
 #include "chunk.h"
@@ -69,7 +68,7 @@ typedef struct
 	int upval_capacity;
 } ClosureObj;
 
-typedef Value (*NativeFn) (int arg_count, Value * args);
+typedef Value (*NativeFn) (int arg_count, Value *args);
 
 typedef struct
 {
@@ -81,7 +80,7 @@ NativeFnObj;
 typedef struct
 {
 	Obj obj;
-	StringObj * name;
+	StringObj *name;
 }
 ClassObj;
 

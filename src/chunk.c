@@ -45,7 +45,8 @@ void chunk_free(Chunk * chunk)
 
 /** Add information to track line numbers of bytecodes
  *  @bytecode_pos: position of the bytecode 
- *  @line: line number associated to the bytecode at @bytecode_pos */
+ *  @line: line number associated to the bytecode at @bytecode_pos
+ **/
 void add_line_metadata(Chunk * chunk, uint32_t bytecode_pos, uint32_t line) {
 	if (line == chunk->current_line && chunk->line_tracker != NULL) {
 		return;

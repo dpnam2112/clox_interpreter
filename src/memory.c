@@ -29,7 +29,6 @@ void * reallocate(void * arr, size_t old_sz, size_t new_sz)
 #else
 		if (vm.gc.allocated >= vm.gc.threshold) {
 			collect_garbage();
-	
 		}
 #endif
 	}
@@ -122,8 +121,7 @@ void free_object(Obj * object)
 void free_objects()
 {
 	Obj * current_obj = vm.objects;
-	while (current_obj != NULL)
-	{
+	while (current_obj != NULL) {
 		Obj * next = current_obj->next;
 		free_object(current_obj);
 		current_obj = next;
@@ -162,7 +160,7 @@ bool mark_value(Value val)
 
 void mark_table(Table * table)
 {
-	for (int i = 0; i < table->capacity; i++)
+	for (uint32_t i = 0; i < table->capacity; i++)
 	{
 		Entry * current = &(table->entries[i]);
 		mark_object((Obj*) current->key);
@@ -185,17 +183,14 @@ void mark_vm_roots()
 
 	mark_table(&vm.globals);
 
-	for (CallFrame * frame = vm.frames; frame < &vm.frames[vm.frame_count]; frame++)
-	{
+	for (CallFrame * frame = vm.frames; frame < &vm.frames[vm.frame_count]; frame++) {
 		mark_object((Obj *) frame->closure);
-		for (int i = 0; i < frame->closure->upval_count; i++)
-		{
+		for (int i = 0; i < frame->closure->upval_count; i++) {
 			mark_object((Obj *) frame->closure->upvalues[i]);
 		}
 	}
 
-	for (UpvalueObj * upvalue = vm.open_upvalues; upvalue != NULL; upvalue = upvalue->next)
-	{
+	for (UpvalueObj * upvalue = vm.open_upvalues; upvalue != NULL; upvalue = upvalue->next) {
 		mark_object((Obj*) upvalue);
 	}
 }
@@ -204,7 +199,7 @@ void mark_vm_roots()
  *  
  *  @obj: the starting point to search for other reachable nodes.
  * */
-void mark_reachable_objects(Obj * obj)
+void mark_reachable_objects(Obj *obj)
 {
 	switch (obj->type)
 	{
@@ -244,8 +239,7 @@ void mark_reachable_objects(Obj * obj)
 			break;
 		}
 		case OBJ_CLASS: {
-			ClassObj* obj = (ClassObj*) obj;
-			mark_object((Obj*) obj->name);
+			mark_object((Obj*) obj);
 			break;
 		}
 		case OBJ_INSTANCE: {

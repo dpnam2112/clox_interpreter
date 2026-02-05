@@ -1,7 +1,8 @@
 #ifndef VALUE_H
 #define VALUE_H
 
-#include "common.h"
+#include <stdbool.h>
+#include <stdint.h>
 
 #define CONST_POOL_LIMIT  0x01000000 //2^24
 
@@ -49,9 +50,14 @@ bool value_equal(Value val_1, Value val_2);
 #define IS_OBJ(value) (((Value) (value)).type == VAL_OBJ)
 #define IS_INTERR(value) (((Value) (value)).type == VAL_INTERR)
 
+/* Limits */
+#define MAX_UPVALUE 256
+#define MAX_LOCALVAR 256
+#define MAX_CALLARGS 256
+
 typedef struct
 {
-	Value * values;
+	Value *values;
 	uint32_t size;
 	uint32_t capacity;
 } ValueArr;
