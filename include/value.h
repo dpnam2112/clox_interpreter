@@ -7,6 +7,7 @@
 
 typedef enum
 {
+    VAL_INTERR, // represent the internal errors
 	VAL_BOOL,
 	VAL_NIL,
 	VAL_NUMBER,
@@ -17,13 +18,14 @@ typedef enum
 typedef struct Obj Obj;
 typedef struct StringObj StringObj;
 
-typedef struct Value
+typedef struct
 {
 	ValueType type;
 	union {
 		bool boolean;
 		double number;
 		Obj * obj;
+        int err_code;
 	} as;
 } Value;
 
@@ -45,6 +47,7 @@ bool value_equal(Value val_1, Value val_2);
 #define IS_NIL(value) (((Value) (value)).type == VAL_NIL)
 #define IS_BOOL(value) (((Value) (value)).type == VAL_BOOL)
 #define IS_OBJ(value) (((Value) (value)).type == VAL_OBJ)
+#define IS_INTERR(value) (((Value) (value)).type == VAL_INTERR)
 
 typedef struct
 {

@@ -1,5 +1,7 @@
-#include "native_fns.h"
+#include "value.h"
 #include "object.h"
+#include "native_fns.h"
+#include <assert.h>
 
 bool _has_attribute(Value value, StringObj* attrname) {
 	if (!IS_INSTANCE_OBJ(value)) {
@@ -12,7 +14,8 @@ bool _has_attribute(Value value, StringObj* attrname) {
 }
 
 Value native_fn_has_attribute(int param_count, Value* params) {
-	Value obj = params[0];
+    assert(param_count == 2);
+    Value val = params[0];
 	StringObj* attrname = AS_STRING(params[1]);
-	return BOOL_VAL(_has_attribute(obj, attrname));
+	return BOOL_VAL(_has_attribute(val, attrname));
 }

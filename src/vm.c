@@ -39,6 +39,7 @@ static Value vm_stack_peek(int distance) {
 }
 
 static Value clock_native(int param_count, Value * params) {
+    assert(param_count == 0);
 	return NUMBER_VAL((double) clock() / CLOCKS_PER_SEC);
 }
 
@@ -208,8 +209,8 @@ bool call_value(Value value, int param_count) {
 		InstanceObj* new_instance = InstanceObj_construct(class_obj);
 		vm_stack_push(OBJ_VAL(*new_instance));
 	} else if (IS_NATIVE_FN_OBJ(value)) {
-		NativeFn nav_fn = AS_NATIVE_FN(value);
-		Value res = nav_fn(param_count, vm.stack_top - param_count);
+		NativeFn native_fn = AS_NATIVE_FN(value);
+		Value res = native_fn(param_count, vm.stack_top - param_count);
 		vm.stack_top -= param_count + 1;
 		vm_stack_push(res);
 	}
@@ -624,7 +625,9 @@ do {\
 			Value property_name_val = (inst == OP_SET_PROPERTY) ? READ_CONST() : READ_CONST_LONG();
 			Value rhs_value = vm_stack_peek(0);
 			InstanceObj* instance = AS_INSTANCE(vm_stack_peek(1));
-			bool success = table_set(&(instance->fields), AS_STRING(property_name_val), rhs_value);
+			if(!table_set(&(instance->fields), AS_STRING(property_name_val), rhs_value)){
+                runtime_error("OP_SET_PROPERTY_LONG failed.");
+            }
 			rhs_value = vm_stack_pop();
 			vm_stack_pop();
 			vm_stack_push(rhs_value);

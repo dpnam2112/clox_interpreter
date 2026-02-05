@@ -69,11 +69,14 @@ bool table_set(Table * table, StringObj * key, Value val)
 	if (table->count + 1 > MAX_LOAD * table->capacity)
 		table_expand(table);
 	Entry * entry = find_entry(table->entries, table->capacity, key);
-	bool new_entry = (entry->key == NULL);
-	if (new_entry) table->count++;
-	entry->key = key;
-	entry->value = val;
-	return new_entry;
+	if (entry->key == NULL) {
+        table->count++;
+        entry->key = key;
+        entry->value = val;
+        return true;
+    }
+
+    return false;
 }
 
 bool table_get(Table * table, StringObj * key, Value * dest)
