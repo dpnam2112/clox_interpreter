@@ -14,6 +14,11 @@
 
 VM vm;
 
+static void call_frame_reset() {
+    // TODO: free the call frame resources
+	vm.frame_count = 0;
+}
+
 static void stack_reset() {
 	vm.stack_top = vm.stack;
 }
@@ -59,6 +64,7 @@ static void define_native_fn(const char * name, NativeFn func)
 void vm_init(bool repl)
 {
 	stack_reset();
+    call_frame_reset();
 	table_init(&vm.strings);
 	table_init(&vm.globals);
 
@@ -83,6 +89,7 @@ void vm_free()
 	table_free(&vm.globals);
 	free_objects();
 	stack_reset();
+    call_frame_reset();
 }
 
 bool gc_empty()
@@ -165,6 +172,7 @@ static void runtime_error(const char * format, ...) {
 //	uint16_t line = chunk_get_line(frame->function->chunk, inst_offset);
 //	fprintf(stderr, "[line %d] in script\n", line);
 	stack_reset();
+    call_frame_reset();
 }
 
 /** read n bytes from a chunk
@@ -207,8 +215,10 @@ bool call_value(Value value, int param_count) {
 	} else if (IS_CLASS_OBJ(value)) {
 		ClassObj *class_obj = AS_CLASS(value);
 		InstanceObj *new_instance = InstanceObj_construct(class_obj);
-		vm.stack_top -= 1;
-		vm_stack_push(OBJ_VAL(*new_instance));
+        vm.stack_top -= param_count;
+        printf("debug: paramcount=%i\n", param_count);
+        vm.stack_top[-1] = OBJ_VAL(new_instance);
+        print_value(OBJ_VAL(new_instance));
 	} else if (IS_NATIVE_FN_OBJ(value)) {
 		NativeFn native_fn = AS_NATIVE_FN(value);
         Value res;
@@ -217,8 +227,8 @@ bool call_value(Value value, int param_count) {
         } else {
             res = native_fn(0, NULL);
         }
-		vm.stack_top -= param_count + 1;
-		vm_stack_push(res);
+        vm.stack_top -= param_count + 1;
+        vm_stack_push(res);
 	}
 
 	return true;
@@ -290,7 +300,7 @@ static void close_upvalues(Value * last)
 static InterpretResult run()
 {
 	// current frame being executed
-	CallFrame * frame = &vm.frames[vm.frame_count - 1];
+	CallFrame *frame = &vm.frames[vm.frame_count - 1];
 
 #define READ_BYTE() *(frame->pc++)
 #define READ_SHORT() (frame->pc += 2, *((uint16_t*) (frame->pc - 2)))
@@ -329,6 +339,7 @@ do {\
 			return INTERPRET_OK;
 		case OP_RETURN: {
 			Value return_value = vm_stack_pop();
+            print_value(return_value);
 			vm.frame_count--;
 			if (vm.frame_count == 0) {
 				vm_stack_pop();	// pop the top-level function
@@ -441,7 +452,7 @@ do {\
 		case OP_GET_GLOBAL:
 		case OP_GET_GLOBAL_LONG: {
 			uint32_t offset = (inst == OP_GET_GLOBAL) ? READ_BYTE() : READ_BYTES(LONG_CONST_OFFSET_SIZE);
-			StringObj * identifier = AS_STRING(READ_CONST_AT(offset));
+			StringObj *identifier = AS_STRING(READ_CONST_AT(offset));
 			Value value;
 			if (!table_get(&vm.globals, identifier, &value)) {
 				runtime_error("Undefined identifier: '%s'.", identifier->chars);
@@ -494,6 +505,8 @@ do {\
 		case OP_CALL: {
 			uint8_t param_count = READ_BYTE();
 			Value called_obj = vm_stack_peek(param_count);
+            print_value(called_obj);
+            printf("\n");
 
 			if (!callable(called_obj)) {
 				runtime_error("object is not callable.");
@@ -501,6 +514,7 @@ do {\
 			}
 
 			if (!call_value(called_obj, param_count)) {
+				runtime_error("failed to call function.");
 				return INTERPRET_RUNTIME_ERROR;
 			}
 
@@ -631,7 +645,7 @@ InterpretResult vm_interpret(Chunk * chunk) {
 }
 
 InterpretResult interpret(const char * source) {
-	ClosureObj * closure = compile(source);
+	ClosureObj *closure = compile(source);
 
 #ifdef DEBUG_LOG
 	printf("compiled the source code");
@@ -641,10 +655,8 @@ InterpretResult interpret(const char * source) {
 		return INTERPRET_COMPILE_ERROR;
 
 	vm_stack_push(OBJ_VAL(*closure));
-
 	// push the top-level code to the frame stack
 	call_value(OBJ_VAL(*closure), 0);
-
 	return run();
 }
 

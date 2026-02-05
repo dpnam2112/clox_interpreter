@@ -160,8 +160,8 @@ ClassObj* ClassObj_construct(StringObj* name) {
 	return new_class;
 }
 
-InstanceObj* InstanceObj_construct(ClassObj* klass) {
-	InstanceObj* new_instance = OBJ_ALLOC(InstanceObj, OBJ_INSTANCE);
+InstanceObj* InstanceObj_construct(ClassObj *klass) {
+	InstanceObj *new_instance = OBJ_ALLOC(InstanceObj, OBJ_INSTANCE);
 	new_instance->klass = klass;
 	table_init(&(new_instance->fields));
 	return new_instance;

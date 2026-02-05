@@ -90,18 +90,18 @@ bool table_get(Table * table, StringObj * key, Value * dest)
 	return true;
 }
 
-bool table_delete(Table * table, StringObj * key, Value * dest)
+bool table_delete(Table * table, StringObj * key, Value *dest)
 {
 	if (table->capacity == 0)
 		return false;
 	Entry * target = find_entry(table->entries, table->capacity, key);
 	if (target->key == NULL) 
 		return false;
-	if (dest != NULL)
-		*dest = target->value;
 	target->deleted = true;
 	target->key = NULL;
-//  table->count--;
+    table->count--;
+	if (dest != NULL)
+		*dest = target->value;
 	return true;
 }
 

@@ -83,8 +83,8 @@ void print_object(Value val)
 			printf("<native function>");
 			break;
 		case OBJ_CLOSURE:
-			ClosureObj* closure = AS_CLOSURE(val);
-			StringObj* closure_name = closure->function->name;
+			ClosureObj *closure = AS_CLOSURE(val);
+			StringObj *closure_name = closure->function->name;
 			printf("<closure '%s'>", (closure_name == NULL) ? "" : closure_name->chars);
 			break;
 		case OBJ_CLASS:

@@ -32,17 +32,17 @@ typedef struct
 {
 	CallFrame frames[CALL_FRAME_MAX];
 	uint8_t frame_count;
-	Chunk * chunk;
-	uint8_t * pc;	// program counter
+	Chunk *chunk;
+	uint8_t *pc;	// program counter
 	Value stack[STACK_MAX];
-	Value * stack_top;
-	Obj * objects;
+	Value *stack_top;
+	Obj *objects;
 
 	/**All Upvalues in the list are sorted by the address of
 	 * the value they references to.
 	 * This means that the first upvalue of the list (the head) always 
 	 * references to the outermost upvalue inside the stack.
-         * When the program counter escapes a scope, if there is any variables used by a outside function,
+     * When the program counter escapes a scope, if there is any variables used by a outside function,
 	 * those variables need to be moved to the heap.
  	 * We use this linked list to track which upvalues need to be moved to the heap.
 	 * */ 

@@ -74,7 +74,7 @@ typedef struct BytecodeLine {
 
 // Dynamic array of bytecodes
 typedef struct {
-	uint8_t * bytecodes;
+	uint8_t *bytecodes;
 	uint32_t size;
 	uint32_t capacity;
 	ValueArr constants;	// constant values
