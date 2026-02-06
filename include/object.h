@@ -87,7 +87,7 @@ ClassObj;
 typedef struct
 {
 	Obj obj;
-	ClassObj* klass;
+	ClassObj *klass;
 	Table fields;
 }
 InstanceObj;

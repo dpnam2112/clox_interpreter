@@ -20,8 +20,9 @@ void table_free(Table * table)
  *
  * return value: reference to the entry that either is empty or contains
  * the given key @key
- * @capacity: number of slots in @entries */
-static Entry * find_entry(Entry * entries, uint32_t capacity, StringObj * key)
+ * @capacity: number of slots in @entries
+ * */
+static Entry * find_entry(Entry * entries, uint32_t capacity, StringObj *key)
 {
 	Entry * tombstone = NULL;
 	uint32_t start = key->hashcode & (capacity - 1), i = start, end_loop = false;
@@ -63,12 +64,26 @@ static void table_expand(Table * table)
 	table->capacity = new_capacity;
 }
 
-bool table_set(Table * table, StringObj * key, Value val)
+bool table_set(Table *table, StringObj *key, Value val)
 {
 	/* Ensure that the load factor does not exceed MAX_LOAD */
 	if (table->count + 1 > MAX_LOAD * table->capacity)
 		table_expand(table);
-	Entry * entry = find_entry(table->entries, table->capacity, key);
+	Entry *entry = find_entry(table->entries, table->capacity, key);
+    if (entry == NULL) {
+        return false;
+    }
+    entry->key = key;
+    entry->value = val;
+    return true;
+}
+
+bool table_add(Table *table, StringObj *key, Value val)
+{
+	/* Ensure that the load factor does not exceed MAX_LOAD */
+	if (table->count + 1 > MAX_LOAD * table->capacity)
+		table_expand(table);
+	Entry *entry = find_entry(table->entries, table->capacity, key);
 	if (entry->key == NULL) {
         table->count++;
         entry->key = key;
@@ -90,18 +105,18 @@ bool table_get(Table * table, StringObj * key, Value * dest)
 	return true;
 }
 
-bool table_delete(Table * table, StringObj * key, Value * dest)
+bool table_delete(Table * table, StringObj * key, Value *dest)
 {
 	if (table->capacity == 0)
 		return false;
 	Entry * target = find_entry(table->entries, table->capacity, key);
 	if (target->key == NULL) 
 		return false;
-	if (dest != NULL)
-		*dest = target->value;
 	target->deleted = true;
 	target->key = NULL;
-//  table->count--;
+    table->count--;
+	if (dest != NULL)
+		*dest = target->value;
 	return true;
 }
 

@@ -360,7 +360,7 @@ static void emit_return()
 	emit_byte(OP_RETURN);
 }
 
-static ClosureObj * end_compiler()
+static ClosureObj* end_compiler()
 {
 	emit_return();
 	FunctionObj *function = current->function;
@@ -377,7 +377,6 @@ static ClosureObj * end_compiler()
 	// so to ensure that @current->function is considered reachable by
 	// the gc, we remove the compiler after creating the closure.
 	current = current->enclosing;
-
 	return closure;
 }
 
@@ -1207,6 +1206,6 @@ ClosureObj * compile(const char *source) {
 		declaration();
 	scanner_free();
 	parser_free();
-	ClosureObj * closure = end_compiler();
+	ClosureObj *closure = end_compiler();
 	return parser.error ? NULL : closure;
 }
