@@ -333,7 +333,6 @@ static InterpretResult run() {
         return INTERPRET_OK;
       case OP_RETURN: {
         Value return_value = vm_stack_pop();
-        print_value(return_value);
         vm.frame_count--;
         if (vm.frame_count == 0) {
           vm_stack_pop();  // pop the top-level function
