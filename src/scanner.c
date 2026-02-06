@@ -49,9 +49,13 @@ static char advance() {
 }
 
 static bool match(const char c) {
-  bool match = *scanner.current == c;
-  if (match && c != '\0')
+  bool match = (*scanner.current == c);
+  if (match && (c != '\0')) {
     scanner.current++;
+    if (c == '\n') {
+      scanner.line++;
+    }
+  }
   return match;
 }
 

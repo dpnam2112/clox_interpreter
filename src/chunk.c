@@ -113,7 +113,7 @@ uint32_t chunk_add_const(Chunk* chunk, Value value) {
 
   vm_stack_push(value);
   value_arr_append(&chunk->constants, value);
-  vm_stack_pop(value);
+  vm_stack_pop();
   return chunk->constants.size - 1;
 }
 
