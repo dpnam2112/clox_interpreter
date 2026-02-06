@@ -8,7 +8,7 @@
 
 void * allocate_object(size_t size, ObjType type)
 {
-	Obj * obj_ref = reallocate(NULL, 0, size);
+	Obj *obj_ref = reallocate(NULL, 0, size);
 	obj_ref->type = type;
 	obj_ref->gc_marked = false;
 
@@ -45,21 +45,17 @@ Entry* find_existing_string_entry(const char * chars, size_t length, uint32_t ha
 		return NULL;
 	uint32_t start = hashcode % vm.strings.capacity;
 	Entry * entry = NULL;
-	for (uint32_t i = 0; i < vm.strings.capacity; i++)
-	{
+	for (uint32_t i = 0; i < vm.strings.capacity; i++) {
 		uint32_t entry_idx = (start + i) % vm.strings.capacity;
 		entry = &vm.strings.entries[entry_idx];
-		if (entry->key != NULL)
-		{
+		if (entry->key != NULL) {
 			StringObj * current_str = entry->key;
 			if (current_str->length == length && 
-				memcmp(current_str->chars, chars, length) == 0)
-			{
+				memcmp(current_str->chars, chars, length) == 0) {
 				return entry;
 			}
 		}
-		else if (!entry->deleted)
-		{
+		else if (!entry->deleted) {
 			return entry;
 		}
 	}

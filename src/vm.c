@@ -41,7 +41,7 @@ int vm_stack_size() {
 }
 
 static Value vm_stack_peek(int distance) {
-	return vm.stack_top[-1 - distance];	// ??
+	return vm.stack_top[-1 - distance];
 }
 
 static Value clock_native(int param_count, Value *params) {
@@ -216,9 +216,7 @@ bool call_value(Value value, int param_count) {
 		ClassObj *class_obj = AS_CLASS(value);
 		InstanceObj *new_instance = InstanceObj_construct(class_obj);
         vm.stack_top -= param_count;
-        printf("debug: paramcount=%i\n", param_count);
-        vm.stack_top[-1] = OBJ_VAL(new_instance);
-        print_value(OBJ_VAL(new_instance));
+        vm.stack_top[-1] = OBJ_VAL(*new_instance);
 	} else if (IS_NATIVE_FN_OBJ(value)) {
 		NativeFn native_fn = AS_NATIVE_FN(value);
         Value res;
@@ -325,8 +323,7 @@ do {\
 #ifdef DBG_TRACE_EXECUTION
 		/* Print stack values */
 		printf("== begin value stack trace ==\n");
-		for (Value * ptr = vm.stack; ptr < vm.stack_top; ++ptr)
-		{
+		for (Value * ptr = vm.stack; ptr < vm.stack_top; ++ptr) {
 			printf("[ ");
 			print_value(*ptr);
 			printf(" ]\n");
@@ -445,7 +442,11 @@ do {\
 		case OP_DEFINE_GLOBAL_LONG: {
 			uint32_t iden_offset = (inst == OP_DEFINE_GLOBAL) ? READ_BYTE() : READ_BYTES(LONG_CONST_OFFSET_SIZE);
 			StringObj * identifier = AS_STRING(READ_CONST_AT(iden_offset));
-			table_set(&vm.globals, identifier, vm_stack_peek(0));
+			if(!table_add(&vm.globals, identifier, vm_stack_peek(0))){
+                // the key already exists.
+				runtime_error("The identifier '%s' is already defined globally.", identifier->chars);
+				return INTERPRET_RUNTIME_ERROR;
+            }
 			vm_stack_pop();
 			break;
 		}
@@ -466,10 +467,11 @@ do {\
 		case OP_SET_GLOBAL:
 		case OP_SET_GLOBAL_LONG: {
 			uint32_t offset = (inst == OP_SET_GLOBAL) ? READ_BYTE() : READ_BYTES(LONG_CONST_OFFSET_SIZE);
-			StringObj * identifier = AS_STRING(READ_CONST_AT(offset));
-			if (table_set(&vm.globals, identifier, vm_stack_peek(0))) {
+			StringObj *identifier = AS_STRING(READ_CONST_AT(offset));
+            Value rhs = vm_stack_peek(0);
+			if (!table_set(&vm.globals, identifier, rhs)) {
+                // the identifier have yet to be defined.
 				runtime_error("Undefined identifier: '%s'.", identifier->chars);
-				table_delete(&vm.globals, identifier, NULL);
 				return INTERPRET_RUNTIME_ERROR;
 			}
 			break;
@@ -505,8 +507,6 @@ do {\
 		case OP_CALL: {
 			uint8_t param_count = READ_BYTE();
 			Value called_obj = vm_stack_peek(param_count);
-            print_value(called_obj);
-            printf("\n");
 
 			if (!callable(called_obj)) {
 				runtime_error("object is not callable.");

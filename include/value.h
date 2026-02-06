@@ -26,7 +26,6 @@ typedef struct
 		bool boolean;
 		double number;
 		Obj * obj;
-        int err_code;
 	} as;
 } Value;
 

@@ -8,7 +8,7 @@ TARGET   := $(BIN_DIR)/clox
 SRCS     := $(wildcard $(SRC_DIR)/*.c)
 OBJS     := $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
-all: $(TARGET)
+clox: $(TARGET)
 
 $(TARGET): $(OBJS) | $(BIN_DIR)
 	$(CC) $(OBJS) -o $@
@@ -18,6 +18,9 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c | $(OBJ_DIR)
 
 $(BIN_DIR) $(OBJ_DIR):
 	mkdir -p $@
+
+run: $(TARGET)
+	$(TARGET)
 
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
