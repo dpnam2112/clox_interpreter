@@ -1,0 +1,10 @@
+class Foo {
+
+}
+
+var foo = Foo();
+print foo.x = 1; // should be 1
+print foo.x; // should be 1
+
+print foo.x + (foo.y = 2) * (foo.y = foo.y * 3); // 13
+print foo.y; // should be 6
