@@ -1,0 +1,26 @@
+// access a variable defined outside of the scope
+var x = 1.53 * 1.123 - 4.43; // -2.71181
+{
+    print x;
+    x = 122;
+}
+
+// define a variable with the same name inside the new scope
+print x; // 122
+{
+    var x = 122 * 122; // 14884
+    print x;
+}
+print x; // 122
+
+// nested scopes
+{
+    var x = 12 * 12 * 12; // 1728
+    var y = 90 / 2;
+    {
+        var x = 13 * 13 * 13; // 2197
+        print x * y; // 2197 * 45 = 98865
+    }
+
+    print x * y; // 77760
+}

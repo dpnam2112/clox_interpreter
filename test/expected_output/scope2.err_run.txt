@@ -1,0 +1,2 @@
+Undefined identifier: 'x'.
+[line 5] in script

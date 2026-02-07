@@ -1,0 +1,16 @@
+// this program should exit with runtime error,
+// since clox doesn't support static checking yet.
+
+{
+    var x = 1;
+    {
+        var y = 2;
+        print x + y; // 3
+        {
+            var z = 3;
+            print x + y + z; // 6
+        }
+        print x + y; // 3
+        print x + y * z; // error: z is not defined.
+    }
+}

@@ -1,0 +1,5 @@
+var x = 1;
+{
+    print x + y; // y is not defined.
+}
+

@@ -155,7 +155,7 @@ static void runtime_error(const char* format, ...) {
     FunctionObj* function = frame->closure->function;
     int inst_offset = frame->pc - function->chunk.bytecodes;
     int line = chunk_get_line(&function->chunk, inst_offset);
-    fprintf(stderr, "[line %d], in ", line);
+    fprintf(stderr, "[line %d] in ", line);
     if (function->name == NULL)
       fprintf(stderr, "script\n");
     else
