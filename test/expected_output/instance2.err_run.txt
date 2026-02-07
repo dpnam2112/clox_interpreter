@@ -1,0 +1,2 @@
+'Foo' object has no property 'a'.
+[line 8] in script

@@ -1,0 +1,8 @@
+// try getting a non-existing property from an instance
+
+class Foo {
+
+}
+
+var x = Foo();
+print x.a;
