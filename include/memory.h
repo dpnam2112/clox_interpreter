@@ -3,7 +3,6 @@
 
 #include <stdlib.h>
 
-#include "common.h"
 #include "value.h"
 
 #define GC_GROW_FACTOR 2

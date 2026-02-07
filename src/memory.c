@@ -1,4 +1,5 @@
 #include "memory.h"
+#include <string.h>
 
 #include "compiler.h"  // for mark_compiler_roots()
 #include "object.h"

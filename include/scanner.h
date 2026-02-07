@@ -1,7 +1,7 @@
 #ifndef SCANNER_H
 #define SCANNER_H
 
-#include "common.h"
+#include <stdint.h>
 
 typedef struct {
   const char* start;

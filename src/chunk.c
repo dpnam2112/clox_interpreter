@@ -1,4 +1,5 @@
 #include "chunk.h"
+#include <string.h>
 
 #include <complex.h>
 #include <stdint.h>
