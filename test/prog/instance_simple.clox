@@ -1,0 +1,46 @@
+class Student {
+
+}
+
+print Student;
+print Student();
+
+var harry = Student();
+harry.firstName = "Harry";
+print harry.firstName; // 'Harry'
+
+harry.lastName = "Potter";
+print harry.lastName; // 'Potter'
+
+harry.age = 17;
+print harry.age; // 17
+
+{
+  class Employee {
+
+  }
+
+  var developer = Employee();
+  developer.firstName = "John";
+  developer.lastName = "Doe";
+  developer.age = 21;
+
+  if (developer.age > harry.age) {
+    print developer.firstName + " is older than " + harry.firstName;
+  } else if (developer.age < harry.age) {
+    print harry.firstName + " is older than " + developer.firstName;
+  }
+}
+
+fun createPerson(PersonKlass, firstName, lastName, age) {
+  var person = PersonKlass();
+  person.firstName = firstName;
+  person.lastName = lastName;
+  person.age = age;
+  return person;
+}
+
+var hermione = createPerson(Student, "Hermione", "Granger", 17);
+print "New student: " + hermione.firstName + " " + hermione.lastName;
+hermione.age = hermione.age + 1;
+print hermione.age;

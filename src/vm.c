@@ -602,6 +602,12 @@ static InterpretResult run() {
          * */
         Value property_name_val =
             (inst == OP_GET_PROPERTY) ? READ_CONST() : READ_CONST_LONG();
+        Value top = vm_stack_peek(0);
+        if (!IS_INSTANCE_OBJ(top)) {
+          runtime_error("Only instances have properties.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
         InstanceObj* instance = AS_INSTANCE(vm_stack_peek(0));
         Value property;
         bool exist = table_get(&instance->fields, AS_STRING(property_name_val),

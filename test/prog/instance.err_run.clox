@@ -1,0 +1,3 @@
+// try getting a property from a non-instance object.
+var x = "hello world";
+print x.len;

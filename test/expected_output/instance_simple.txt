@@ -1,0 +1,8 @@
+<class 'Student'>
+<Student instance>
+'Harry'
+'Potter'
+17
+'John is older than Harry'
+'New student: Hermione Granger'
+18
