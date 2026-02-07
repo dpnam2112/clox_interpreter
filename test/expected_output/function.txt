@@ -1,0 +1,24 @@
+'== test simple functions =='
+3
+1
+7
+-119
+'== test simple functions done =='
+'== Fibonacci test =='
+0
+1
+55
+610
+10946
+'== Fibonacci test done =='
+'== Sum test =='
+0
+1
+55
+120
+231
+'== Sum test done =='
+'== Void function test =='
+'hello, Nam'
+'hello OK'
+'== Void function test done =='

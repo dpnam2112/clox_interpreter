@@ -1,0 +1,70 @@
+print "== test simple functions ==";
+fun add(a, b) {
+    return a + b;
+}
+
+print add(1, 2); // 3
+print add(-12, 13); // 1
+
+fun mul_then_add(a, b) {
+    var c = 0;
+    {
+        c = 1;
+        {
+            var c = 2;
+        }
+    }
+    return a * b + c;
+}
+
+print mul_then_add(2, 3); // 7
+print mul_then_add(10, -12); // -119
+
+print "== test simple functions done ==";
+
+print "== Fibonacci test ==";
+fun fib(n) {
+    if (n < 2) {
+        return n;
+    }
+
+    return fib(n - 1) + fib(n - 2);
+}
+
+print fib(0); // 0
+print fib(1); // 1
+print fib(10); // 55
+print fib(15); // 610
+print fib(21); // 10946
+print "== Fibonacci test done ==";
+
+print "== Sum test ==";
+// sum from 0 to n
+fun sum(n) {
+    if (n < 2) {
+        return n;
+    }
+
+    return n + sum(n - 1);
+}
+
+print sum(0); // 0
+print sum(1); // 1
+print sum(10); // 55
+print sum(15); // 120
+print sum(21); // 231
+print "== Sum test done ==";
+
+
+print "== Void function test ==";
+fun hello(name) {
+    print "hello, " + name;
+}
+
+var helloRet = hello("Nam");
+if (helloRet == nil) {
+    print "hello OK";
+} else {
+    print "hello failed";
+}
+print "== Void function test done ==";
