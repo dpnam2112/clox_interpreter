@@ -1,7 +1,6 @@
-#include "native_fns.h"
-
 #include <assert.h>
 
+#include "native_fns.h"
 #include "object.h"
 #include "value.h"
 

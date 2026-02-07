@@ -4,7 +4,6 @@
 #include <stdlib.h>
 
 #include "chunk.h"
-#include "debug.h"
 #include "memory.h"
 #include "object.h"
 #include "scanner.h"

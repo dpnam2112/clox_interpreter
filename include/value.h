@@ -15,7 +15,6 @@ typedef enum {
 } ValueType;
 
 typedef struct Obj Obj;
-typedef struct StringObj StringObj;
 
 typedef struct {
   ValueType type;

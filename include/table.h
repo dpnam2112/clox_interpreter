@@ -1,10 +1,11 @@
 #ifndef TABLE_H
 #define TABLE_H
 
-#include "common.h"
 #include "value.h"
 
 #define MAX_LOAD 0.75
+
+typedef struct StringObj StringObj;
 
 typedef struct Entry {
   StringObj* key;

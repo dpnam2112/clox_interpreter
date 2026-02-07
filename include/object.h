@@ -1,6 +1,7 @@
 #ifndef OBJECT_H
 #define OBJECT_H
 
+#include <stddef.h>
 #include "chunk.h"
 #include "table.h"
 #include "value.h"
@@ -32,12 +33,12 @@ struct Obj {
   bool gc_marked;
 };
 
-struct StringObj {
+typedef struct StringObj {
   Obj obj;
   uint32_t length;
   char* chars;
   uint32_t hashcode;
-};
+} StringObj;
 
 typedef struct FunctionObj {
   Obj obj;

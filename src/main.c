@@ -1,4 +1,5 @@
-#include "common.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include "vm.h"
 
 // read-eval-print loop

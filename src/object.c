@@ -1,5 +1,4 @@
 #include "object.h"
-
 #include "memory.h"
 #include "table.h"
 #include "vm.h"

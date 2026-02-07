@@ -1,5 +1,4 @@
 #include "value.h"
-
 #include "memory.h"
 #include "object.h"
 
@@ -84,12 +83,13 @@ void print_object(Value val) {
     case OBJ_NATIVE_FN:
       printf("<native function>");
       break;
-    case OBJ_CLOSURE:
+    case OBJ_CLOSURE: {
       ClosureObj* closure = AS_CLOSURE(val);
       StringObj* closure_name = closure->function->name;
       printf("<closure '%s'>",
              (closure_name == NULL) ? "" : closure_name->chars);
       break;
+    }
     case OBJ_CLASS:
       printf("<class '%s'>", AS_CLASS(val)->name->chars);
       break;

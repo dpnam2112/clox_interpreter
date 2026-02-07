@@ -104,6 +104,7 @@ void free_object(Obj* object) {
       free_instance_obj((InstanceObj*)object);
       break;
     default:
+      break;
   }
 
 #ifdef DEBUG_LOG_GC
