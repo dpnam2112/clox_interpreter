@@ -74,7 +74,16 @@ typedef struct {
 
 typedef struct {
   Obj obj;
+  Value receiver;
+  ClosureObj* method;
+} BoundMethodObj;
+
+typedef struct {
+  Obj obj;
   StringObj* name;
+  
+  // this tables contain mappings from names to bound method objects.
+  Table methods;
 } ClassObj;
 
 typedef struct {

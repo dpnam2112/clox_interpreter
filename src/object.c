@@ -146,6 +146,7 @@ NativeFnObj* NativeFnObj_construct(NativeFn func) {
 ClassObj* ClassObj_construct(StringObj* name) {
   ClassObj* new_class = OBJ_ALLOC(ClassObj, OBJ_CLASS);
   new_class->name = name;
+  table_init(&new_class->methods);
   return new_class;
 }
 
