@@ -442,12 +442,7 @@ static InterpretResult run() {
                                    ? READ_BYTE()
                                    : READ_BYTES(LONG_CONST_OFFSET_SIZE);
         StringObj* identifier = AS_STRING(READ_CONST_AT(iden_offset));
-        if (!table_add(&vm.globals, identifier, vm_stack_peek(0))) {
-          // the key already exists.
-          runtime_error("The identifier '%s' is already defined globally.",
-                        identifier->chars);
-          return INTERPRET_RUNTIME_ERROR;
-        }
+        table_set(&vm.globals, identifier, vm_stack_peek(0));
         vm_stack_pop();
         break;
       }
@@ -474,7 +469,7 @@ static InterpretResult run() {
         StringObj* identifier = AS_STRING(READ_CONST_AT(offset));
         Value rhs = vm_stack_peek(0);
         if (!table_set(&vm.globals, identifier, rhs)) {
-          // the identifier have yet to be defined.
+          // the identifier has yet to be defined.
           runtime_error("Undefined identifier: '%s'.", identifier->chars);
           return INTERPRET_RUNTIME_ERROR;
         }
@@ -645,10 +640,7 @@ static InterpretResult run() {
             (inst == OP_SET_PROPERTY) ? READ_CONST() : READ_CONST_LONG();
         Value rhs_value = vm_stack_peek(0);
         InstanceObj* instance = AS_INSTANCE(vm_stack_peek(1));
-        if (!table_set(&(instance->fields), AS_STRING(property_name_val),
-                       rhs_value)) {
-          runtime_error("OP_SET_PROPERTY_LONG failed.");
-        }
+        table_set(&(instance->fields), AS_STRING(property_name_val), rhs_value);
         rhs_value = vm_stack_pop();
         vm_stack_pop();
         vm_stack_push(rhs_value);
