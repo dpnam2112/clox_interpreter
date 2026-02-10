@@ -77,6 +77,7 @@ bool table_set(Table* table, StringObj* key, Value val) {
   }
   entry->key = key;
   entry->value = val;
+  entry->deleted = false;
   return true;
 }
 
@@ -89,6 +90,7 @@ bool table_add(Table* table, StringObj* key, Value val) {
     table->count++;
     entry->key = key;
     entry->value = val;
+    entry->deleted = false;
     return true;
   }
 
