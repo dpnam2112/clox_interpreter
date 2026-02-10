@@ -1,0 +1,6 @@
+class Student {
+  fun sayHello() {
+    var firstName = "Nam";
+    print "Hello, " + "my name is " + firstName + "!";
+  }
+}

@@ -18,6 +18,9 @@ EX_SOFTWARE=70
 clear
 echo -e "${BOLD}${CYAN}Starting clox Test Suite...${NC}\n"
 
+make clean
+make clox
+
 for source_file in test/prog/*.clox; do
     name=$(basename "$source_file" .clox)
     expected_file="./test/expected_output/$name.txt"

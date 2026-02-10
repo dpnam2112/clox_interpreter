@@ -172,6 +172,20 @@ static void runtime_error(const char* format, ...) {
   call_frame_reset();
 }
 
+/** panic: for internal runtime errors that cannot be recovered.
+ * stop the runtime immediately.
+ * TODO: implement placeholder for graceful shutdown.
+ * */
+static void panic(const char* format, ...) {
+  va_list args;
+  fprintf(stderr, "\033[1;31m [panic] \033[0m");
+  va_start(args, format);
+  vfprintf(stderr, format, args);
+  va_end(args);
+  fputs("\n", stderr);
+  exit(-1);
+}
+
 /** read n bytes from a chunk
  * @param byte_count: number of bytes which represents the offset
  * @param pc: pointer pointing to the program counter
@@ -425,6 +439,9 @@ static InterpretResult run() {
         BINARY_OP(BOOL_VAL, >);
         break;
       case META_LINE_NUM:
+        // TODO(line number): remove META_LINE_NUM opcode
+        // a possible solution is a data structure like
+        // line-number table of cpython (lnotab)
         READ_SHORT();
         break;
       case OP_PRINT: {
@@ -534,6 +551,7 @@ static InterpretResult run() {
         for (int i = 0; i < closure->function->upval_count; i++) {
           uint8_t upval_info = READ_BYTE();
 
+          // TODO(closure): this is unecessary. one bit flag is enough.
           bool local = upval_info & 1;  // Extract the first bit (LSB)
           bool long_offset =
               (upval_info & (1 << 1)) >> 1;  // Extract the second bit
@@ -644,6 +662,49 @@ static InterpretResult run() {
         rhs_value = vm_stack_pop();
         vm_stack_pop();
         vm_stack_push(rhs_value);
+        break;
+      }
+      case OP_METHOD:
+      case OP_METHOD_LONG: {
+        /** OP_METHOD/OP_METHOD_LONG adds the closure at the top of the
+         * value stack to the method table of the class object next to
+         * that closure. It takes the method name's offset in the constant
+         * pool as the argument.
+         *
+         * Value stack's pre-condition:
+         * == Stack ==
+         * ... <class> <closure>
+         * ===========
+         *
+         * Value stack's post-condition:
+         * == Stack ==
+         * ... <class>
+         * ===========
+         * */
+
+        Value method_name_val =
+            (inst == OP_METHOD) ? READ_CONST() : READ_CONST_LONG();
+        if (!(IS_CLASS_OBJ(vm_stack_peek(1)) &&
+              IS_CLOSURE_OBJ(vm_stack_peek(0)) &&
+              IS_STRING_OBJ(method_name_val))) {
+          panic("OP_METHOD's pre-condition check fails.");
+        }
+
+        StringObj* method_name = AS_STRING(method_name_val);
+        ClassObj* klass = AS_CLASS(vm_stack_peek(1));
+        ClosureObj* method = AS_CLOSURE(vm_stack_peek(0));
+
+        bool exist = table_set(&klass->methods, method_name, OBJ_VAL(method));
+        if (exist) {
+          // deleting the class from global variable table,
+          // if it's defined globally
+          table_delete(&vm.globals, klass->name, NULL);
+          runtime_error("Duplicate method name ('%s') in class '%s'.",
+                        method_name->chars, klass->name->chars);
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        vm_stack_pop();
         break;
       }
     }

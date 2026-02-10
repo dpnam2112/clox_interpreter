@@ -12,6 +12,9 @@ SRC_FILES = $(shell find . -iname "*.c" -o -iname "*.h")
 SRCS     := $(wildcard $(SRC_DIR)/*.c)
 OBJS     := $(SRCS:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
+# external flags
+CFLAGS += $(EXT_FLAGS)
+
 clox: $(TARGET)
 
 $(TARGET): $(OBJS) | $(BIN_DIR)

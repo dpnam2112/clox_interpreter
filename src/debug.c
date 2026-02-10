@@ -8,6 +8,8 @@
 size_t current_line;
 bool line_change;
 
+int disassemble_inst(Chunk* chunk, size_t offset);
+
 void disassemble_chunk(Chunk* chunk, const char* name) {
   // Initialize bytecode logger's state
   current_line = 0;
@@ -237,6 +239,10 @@ int disassemble_inst(Chunk* chunk, size_t offset) {
       return const_instruction("OP_SET_PROPERTY", chunk, offset);
     case OP_SET_PROPERTY_LONG:
       return const_long_instruction("OP_SET_PROPERTY_LONG", chunk, offset);
+    case OP_METHOD:
+      return const_instruction("OP_METHOD", chunk, offset);
+    case OP_METHOD_LONG:
+      return const_long_instruction("OP_METHOD_LONG", chunk, offset);
     case OP_EXIT:
       return simple_instruction("OP_EXIT", offset);
     default:

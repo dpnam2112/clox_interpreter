@@ -229,7 +229,7 @@ void mark_reachable_objects(Obj* obj) {
     }
     case OBJ_CLASS: {
       mark_object((Obj*)obj);
-      ClassObj *klass = (ClassObj*) obj;
+      ClassObj* klass = (ClassObj*)obj;
       mark_table(&klass->methods);
       break;
     }
