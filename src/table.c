@@ -28,7 +28,7 @@ static Entry* find_entry(Entry* entries, uint32_t capacity, StringObj* key) {
     // hash table must always reserve free space (see LOAD_FACTOR)
     // so this loop should break.
     if (entries[i].key == NULL) {
-      if (!entries[i].deleted) {
+      if (!entries[i].tombstone) {
         // This slot is not a tombstone (not be used by anyone so far),
         // so we can end the look-up here.
         // Prioritize recyling the very-first found tombstone entry so
@@ -77,7 +77,7 @@ bool table_set(Table* table, StringObj* key, Value val) {
   }
   entry->key = key;
   entry->value = val;
-  entry->deleted = false;
+  entry->tombstone = false;
   return true;
 }
 
@@ -90,7 +90,7 @@ bool table_add(Table* table, StringObj* key, Value val) {
     table->count++;
     entry->key = key;
     entry->value = val;
-    entry->deleted = false;
+    entry->tombstone = false;
     return true;
   }
 
@@ -113,7 +113,7 @@ bool table_delete(Table* table, StringObj* key, Value* dest) {
   Entry* target = find_entry(table->entries, table->capacity, key);
   if (target->key == NULL)
     return false;
-  target->deleted = true;
+  target->tombstone = true;
   target->key = NULL;
   table->count--;
   if (dest != NULL)
