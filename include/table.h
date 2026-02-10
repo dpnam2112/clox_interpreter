@@ -23,15 +23,10 @@ void table_init(Table* table);
 void table_free(Table* table);
 
 /* Replace value associated with a given key.
- * return false if the key doesn't exist.
+ * return a boolean value indicates whether
+ * the key already exists in the table.
  * */
 bool table_set(Table* table, StringObj* key, Value val);
-
-/** table_add: add a new key-value to the table.
- * if the key is already exists, return false.
- * Return true otherwise.
- * */
-bool table_add(Table* table, StringObj* key, Value val);
 
 /* get the value asscoiated to the given key
  * the retrieved value stored in the variable pointed by @dest
