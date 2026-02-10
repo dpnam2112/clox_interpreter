@@ -22,18 +22,26 @@ void table_free(Table* table) {
  * */
 static Entry* find_entry(Entry* entries, uint32_t capacity, StringObj* key) {
   Entry* tombstone = NULL;
-  uint32_t start = key->hashcode & (capacity - 1), i = start, end_loop = false;
-  while (!end_loop) {
+  uint32_t start = key->hashcode & (capacity - 1);
+  uint32_t i = start;
+  for (;;) {
+    // hash table must always reserve free space (see LOAD_FACTOR)
+    // so this loop should break.
     if (entries[i].key == NULL) {
-      if (!entries[i].deleted)
+      if (!entries[i].deleted) {
+        // This slot is not a tombstone (not be used by anyone so far),
+        // so we can end the look-up here.
+        // Prioritize recyling the very-first found tombstone entry so
+        // later look-ups on this key would be faster.
         return (tombstone != NULL) ? tombstone : &entries[i];
-      else if (tombstone == NULL)
+      } else if (tombstone == NULL) {
         tombstone = &entries[i];
-    } else if (entries[i].key == key)
+      }
+    } else if (entries[i].key == key) {
       return &entries[i];
+    }
+
     i = (i + 1) % capacity;
-    if (i == start)
-      end_loop = true;
   }
 
   return tombstone;
