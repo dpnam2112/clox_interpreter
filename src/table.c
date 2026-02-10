@@ -1,4 +1,5 @@
 #include "table.h"
+#include <assert.h>
 #include "memory.h"
 #include "object.h"
 #include "value.h"
@@ -72,29 +73,15 @@ bool table_set(Table* table, StringObj* key, Value val) {
   if (table->count + 1 > MAX_LOAD * table->capacity)
     table_expand(table);
   Entry* entry = find_entry(table->entries, table->capacity, key);
-  if (entry == NULL) {
-    return false;
+  bool exist = (entry->key == key && !entry->tombstone);
+  if(!exist) {
+    table->count++;
   }
+
   entry->key = key;
   entry->value = val;
   entry->tombstone = false;
-  return true;
-}
-
-bool table_add(Table* table, StringObj* key, Value val) {
-  /* Ensure that the load factor does not exceed MAX_LOAD */
-  if (table->count + 1 > MAX_LOAD * table->capacity)
-    table_expand(table);
-  Entry* entry = find_entry(table->entries, table->capacity, key);
-  if (entry->key == NULL) {
-    table->count++;
-    entry->key = key;
-    entry->value = val;
-    entry->tombstone = false;
-    return true;
-  }
-
-  return false;
+  return exist;
 }
 
 bool table_get(Table* table, StringObj* key, Value* dest) {
