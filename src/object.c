@@ -156,3 +156,10 @@ InstanceObj* InstanceObj_construct(ClassObj* klass) {
   table_init(&(new_instance->fields));
   return new_instance;
 }
+
+BoundMethodObj* BoundMethodObj_construct(Value receiver, ClosureObj* method) {
+  BoundMethodObj* bmethod = OBJ_ALLOC(BoundMethodObj, OBJ_BOUND_METHOD);
+  bmethod->receiver = receiver;
+  bmethod->method = method;
+  return bmethod;
+}

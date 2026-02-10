@@ -23,6 +23,7 @@ typedef enum {
   OBJ_NATIVE_FN,
   OBJ_CLASS,
   OBJ_INSTANCE,
+  OBJ_BOUND_METHOD,
 } ObjType;
 
 struct Obj {
@@ -101,6 +102,7 @@ typedef struct {
 #define IS_NATIVE_FN_OBJ(value) (is_obj_type(value, OBJ_NATIVE_FN))
 #define IS_CLASS_OBJ(value) (is_obj_type(value, OBJ_CLASS))
 #define IS_INSTANCE_OBJ(value) (is_obj_type(value, OBJ_INSTANCE))
+#define IS_BOUND_METHOD_OBJ(value) (is_obj_type(value, OBJ_BOUND_METHOD))
 
 #define AS_STRING(value) ((StringObj*)AS_OBJ(value))
 #define AS_CSTRING(value) (AS_STRING(value)->chars)
@@ -110,6 +112,7 @@ typedef struct {
 #define AS_NATIVE_FN(value) (((NativeFnObj*)AS_OBJ(value))->function)
 #define AS_CLASS(value) ((ClassObj*)AS_OBJ(value))
 #define AS_INSTANCE(value) ((InstanceObj*)AS_OBJ(value))
+#define AS_BOUND_METHOD(value) ((BoundMethodObj*)AS_OBJ(value))
 
 static inline bool is_obj_type(Value value, ObjType type) {
   return IS_OBJ(value) && AS_OBJ(value)->type == type;
@@ -124,6 +127,7 @@ UpvalueObj* UpvalueObj_construct(Value*);
 NativeFnObj* NativeFnObj_construct(NativeFn func);
 ClassObj* ClassObj_construct(StringObj*);
 InstanceObj* InstanceObj_construct(ClassObj* klass);
+BoundMethodObj* BoundMethodObj_construct(Value receiver, ClosureObj* method);
 
 /* print_object: print the string representation of an object */
 void print_object(Value);

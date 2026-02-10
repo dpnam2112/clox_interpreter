@@ -98,6 +98,13 @@ void print_object(Value val) {
     case OBJ_INSTANCE:
       printf("<%s instance>", AS_INSTANCE(val)->klass->name->chars);
       break;
+    case OBJ_BOUND_METHOD: {
+      BoundMethodObj* bmethod = AS_BOUND_METHOD(val);
+      StringObj* fun_name = bmethod->method->function->name;
+      ClassObj* klass = AS_INSTANCE(bmethod->receiver)->klass;
+      printf("<bound method '%s'.'%s'>", klass->name->chars, fun_name->chars);
+      break;
+    }
     case OBJ_NONE:
       printf("not an object");
       break;
