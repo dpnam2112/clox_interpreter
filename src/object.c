@@ -52,7 +52,7 @@ Entry* find_existing_string_entry(const char* chars,
           memcmp(current_str->chars, chars, length) == 0) {
         return entry;
       }
-    } else if (!entry->deleted) {
+    } else if (!entry->tombstone) {
       return entry;
     }
   }
@@ -94,7 +94,7 @@ StringObj* StringObj_construct(const char* chars, size_t length) {
   } else {
     entry->key = str_obj;
     entry->value = NIL_VAL();
-    entry->deleted = false;
+    entry->tombstone = false;
     vm.strings.count++;
   }
 

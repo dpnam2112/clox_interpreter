@@ -9,7 +9,7 @@ typedef struct StringObj StringObj;
 
 typedef struct Entry {
   StringObj* key;
-  bool deleted;  // was the entry deleted before?
+  bool tombstone;
   Value value;
 } Entry;
 
