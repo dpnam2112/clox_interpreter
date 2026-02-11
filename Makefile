@@ -1,5 +1,5 @@
 CC       := gcc
-CFLAGS   := -Iinclude -Wall -Wextra -g -std=c11
+CFLAGS   := -Iinclude -Wall -Wextra -Werror -g -std=c11
 SRC_DIR  := src
 OBJ_DIR  := build
 BIN_DIR  := bin
