@@ -4,8 +4,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define CONST_POOL_LIMIT 0x01000000  // 2^24
-
 typedef enum {
   VAL_INTERR,  // represent the internal errors
   VAL_BOOL,

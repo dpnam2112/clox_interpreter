@@ -74,7 +74,7 @@ bool table_set(Table* table, StringObj* key, Value val) {
     table_expand(table);
   Entry* entry = find_entry(table->entries, table->capacity, key);
   bool exist = (entry->key == key && !entry->tombstone);
-  if(!exist) {
+  if (!exist) {
     table->count++;
   }
 

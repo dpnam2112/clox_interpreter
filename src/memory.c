@@ -72,6 +72,7 @@ void free_native_fn_obj(NativeFnObj* obj) {
 }
 
 void free_class_obj(ClassObj* obj) {
+  table_free(&obj->methods);
   FREE(ClassObj, obj);
 }
 
@@ -228,6 +229,8 @@ void mark_reachable_objects(Obj* obj) {
     }
     case OBJ_CLASS: {
       mark_object((Obj*)obj);
+      ClassObj* klass = (ClassObj*)obj;
+      mark_table(&klass->methods);
       break;
     }
     case OBJ_INSTANCE: {
@@ -236,7 +239,12 @@ void mark_reachable_objects(Obj* obj) {
       mark_table(&(instance->fields));
       break;
     }
-
+    case OBJ_BOUND_METHOD: {
+      BoundMethodObj* bmethod = (BoundMethodObj*)obj;
+      mark_value(bmethod->receiver);
+      mark_object((Obj*) bmethod->method);
+      break;
+    }
     default:
       break;
   }

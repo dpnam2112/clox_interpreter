@@ -146,6 +146,7 @@ NativeFnObj* NativeFnObj_construct(NativeFn func) {
 ClassObj* ClassObj_construct(StringObj* name) {
   ClassObj* new_class = OBJ_ALLOC(ClassObj, OBJ_CLASS);
   new_class->name = name;
+  table_init(&new_class->methods);
   return new_class;
 }
 
@@ -154,4 +155,11 @@ InstanceObj* InstanceObj_construct(ClassObj* klass) {
   new_instance->klass = klass;
   table_init(&(new_instance->fields));
   return new_instance;
+}
+
+BoundMethodObj* BoundMethodObj_construct(Value receiver, ClosureObj* method) {
+  BoundMethodObj* bmethod = OBJ_ALLOC(BoundMethodObj, OBJ_BOUND_METHOD);
+  bmethod->receiver = receiver;
+  bmethod->method = method;
+  return bmethod;
 }

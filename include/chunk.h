@@ -13,7 +13,16 @@
 
 #define LONG_LOCAL_OFFSET_SIZE 3
 #define LONG_UPVAL_OFFSET_SIZE 2
+
 #define LONG_CONST_OFFSET_SIZE 3
+#define CHUNK_CONST_POOL_MAX (1 << 8 * LONG_CONST_OFFSET_SIZE)
+
+#define CHUNK_CONST_POOL_EFULL UINT32_MAX
+
+_Static_assert(
+    CHUNK_CONST_POOL_MAX < CHUNK_CONST_POOL_EFULL,
+    "Chunk's constant pool limit must be less than CHUNK_CONST_POOL_EFULL, "
+    "which is reserved for error returned when the pool is full.");
 
 typedef enum {
   OP_CONST,
@@ -61,6 +70,8 @@ typedef enum {
   OP_GET_PROPERTY_LONG,
   OP_SET_PROPERTY,
   OP_SET_PROPERTY_LONG,
+  OP_METHOD,
+  OP_METHOD_LONG,
   META_LINE_NUM,
 } Opcode;
 
@@ -95,7 +106,10 @@ void chunk_append(Chunk* chunk, uint8_t byte, uint16_t line);
 void chunk_append_bytes(Chunk* chunk, void* bytes, int n);
 
 /* add_const: add 'value' to chunk->constants and return
- * index of the added value */
+ * index of the added value
+ *
+ * TODO: how should this behave if the constant pool is full?
+ * */
 uint32_t chunk_add_const(Chunk* chunk, Value value);
 
 /* write a load instruction that loads @value from constant pool to bytecode
@@ -105,5 +119,5 @@ void chunk_write_load_const(Chunk* chunk, Value value, uint16_t line);
 /* Get the line where the bytecode at index is interpreted  */
 uint16_t chunk_get_line(Chunk* chunk, uint32_t index);
 
-uint32_t chunk_get_const_pool_size(Chunk* chunk);
+bool chunk_const_pool_is_full(Chunk* chunk);
 #endif

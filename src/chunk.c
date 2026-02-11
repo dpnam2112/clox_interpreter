@@ -6,6 +6,7 @@
 
 #include "memory.h"
 #include "object.h"
+#include "value.h"
 #include "vm.h"
 
 // Expand the chunk's bytecode array so that it can contain more n bytes
@@ -104,8 +105,8 @@ void chunk_append_bytes(Chunk* chunk, void* bytes, int n) {
 }
 
 uint32_t chunk_add_const(Chunk* chunk, Value value) {
-  if (chunk->constants.size + 1 > CONST_POOL_LIMIT)
-    return 0;  // dummy offset
+  if (chunk->constants.size + 1 > CHUNK_CONST_POOL_MAX)
+    return CHUNK_CONST_POOL_EFULL;
 
   // The call of value_arr_append can trigger the garbage collector,
   // and the @value which will be pushed maybe used later.
@@ -125,20 +126,19 @@ void chunk_write_load_const(Chunk* chunk, Value value, uint16_t line) {
 
   Opcode load_const, load_const_long;
 
-  if (IS_CLOSURE_OBJ(value))
+  if (IS_CLOSURE_OBJ(value)) {
     load_const = OP_CLOSURE, load_const_long = OP_CLOSURE_LONG;
-
-  else
+  } else {
     load_const = OP_CONST, load_const_long = OP_CONST_LONG;
+  }
 
   // add instruction's opcode
   chunk_append(
       chunk, (const_offset <= UINT8_MAX) ? load_const : load_const_long, line);
-
-  // parameter of OP_CONST_LONG takes up 3 bytes
-  chunk_append_bytes(chunk, &const_offset, (const_offset <= UINT8_MAX) ? 1 : 3);
+  chunk_append_bytes(chunk, &const_offset,
+                     (const_offset <= UINT8_MAX) ? 1 : LONG_CONST_OFFSET_SIZE);
 }
 
-uint32_t chunk_get_const_pool_size(Chunk* chunk) {
-  return chunk->constants.size;
+bool chunk_const_pool_is_full(Chunk* chunk) {
+  return (chunk->constants.size >= CHUNK_CONST_POOL_MAX);
 }

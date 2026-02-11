@@ -8,6 +8,8 @@
 size_t current_line;
 bool line_change;
 
+int disassemble_inst(Chunk* chunk, size_t offset);
+
 void disassemble_chunk(Chunk* chunk, const char* name) {
   // Initialize bytecode logger's state
   current_line = 0;
@@ -78,14 +80,12 @@ int upval_instruction(const char* name, Chunk* chunk, int offset) {
   if (opcode == OP_GET_UPVAL_LONG || opcode == OP_SET_UPVAL_LONG) {
     memcpy(&upval_offset, &(chunk->bytecodes[offset + 1]),
            LONG_UPVAL_OFFSET_SIZE);
-    printf("%-16s %4d '", name, upval_offset);
-    printf("'\n");
+    printf("%-16s %4d\n", name, upval_offset);
     return offset + LONG_UPVAL_OFFSET_SIZE + 1;
   }
 
   upval_offset = chunk->bytecodes[offset + 1];
-  printf("%-16s %4d '", name, upval_offset);
-  printf("'\n");
+  printf("%-16s %4d\n", name, upval_offset);
   return offset + 2;
 }
 
@@ -184,6 +184,7 @@ int disassemble_inst(Chunk* chunk, size_t offset) {
     case OP_SET_LOCAL:
       return single_param_inst("OP_SET_LOCAL", chunk, offset, 1);
     case OP_GET_UPVAL:
+      return upval_instruction("OP_GET_UPVAL", chunk, offset);
     case OP_SET_UPVAL:
       return upval_instruction("OP_SET_UPVAL", chunk, offset);
     case OP_JMP:
@@ -237,6 +238,10 @@ int disassemble_inst(Chunk* chunk, size_t offset) {
       return const_instruction("OP_SET_PROPERTY", chunk, offset);
     case OP_SET_PROPERTY_LONG:
       return const_long_instruction("OP_SET_PROPERTY_LONG", chunk, offset);
+    case OP_METHOD:
+      return const_instruction("OP_METHOD", chunk, offset);
+    case OP_METHOD_LONG:
+      return const_long_instruction("OP_METHOD_LONG", chunk, offset);
     case OP_EXIT:
       return simple_instruction("OP_EXIT", offset);
     default:
@@ -246,25 +251,3 @@ int disassemble_inst(Chunk* chunk, size_t offset) {
 
   return offset;
 }
-
-//
-//// dump one bytecode line of the chunk, starting from 'start'
-// uint8_t chunk_bytecode_dump_line(Chunk * chunk, uint32_t start)
-//{
-//	uint8_t i;
-//	for (i = 0; i < 8 && start + i < chunk->size; i++)
-//	{
-//		printf("%02x ", chunk->bytecodes[start + i]);
-//	}
-// }
-//
-// void chunk_bytecode_dump(Chunk * chunk, const char * name)
-//{
-//	printf("=== %s ===\n", name);
-//	uint32_t start = 0;
-//	while (start < chunk->size)
-//	{
-//		start += chunk_bytecode_dump_line(chunk, start);
-//		printf("\n");
-//	}
-// }

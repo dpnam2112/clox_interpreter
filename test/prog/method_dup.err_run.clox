@@ -1,0 +1,14 @@
+class Student {
+  fun f() {
+
+  }
+
+  fun f() {
+
+  }
+
+  fun sayHello() {
+    var firstName = "Nam";
+    print "Hello, " + "my name is " + firstName + "!";
+  }
+}

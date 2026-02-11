@@ -1,0 +1,50 @@
+class Student {
+  fun sayHello() {
+    return "Hello!";
+  }
+
+  fun sayHelloTo(name) {
+    return "Hello, " + name + "!";
+  }
+}
+
+print "test a simple method...";
+var harry = Student();
+if (harry.sayHello() == "Hello!") {
+  print "OK";
+} else {
+  print "Failed";
+}
+
+print "test passing an argument to a method...";
+if (harry.sayHelloTo("Nam") == "Hello, Nam!") {
+  print "OK";
+} else {
+  print "Failed.";
+}
+
+print "simple bound method test...";
+var harrySayHelloTo = harry.sayHelloTo;
+if (harrySayHelloTo("Nam") == "Hello, Nam!") {
+  print "OK";
+} else {
+  print "Failed.";
+}
+
+class AdderCreator {
+  fun newAdder(x) {
+    fun _adder(y) {
+      return x + y;
+    }
+
+    return _adder;
+  }
+}
+
+print "test returning a closure from a method...";
+var add_one = AdderCreator().newAdder(1);
+if(add_one(101) == 102) {
+  print "OK";
+} else {
+  print "Failed.";
+}

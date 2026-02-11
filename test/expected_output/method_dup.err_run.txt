@@ -1,0 +1,2 @@
+Duplicate method name ('f') in class 'Student'.
+[line 13] in script

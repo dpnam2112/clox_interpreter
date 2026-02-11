@@ -12,6 +12,10 @@
 #include "value.h"
 #include "vm.h"
 
+#ifdef DBG_DISASSEMBLE
+#include "debug.h"
+#endif
+
 typedef struct IntArr {
   int* head;
   int size;
@@ -19,8 +23,8 @@ typedef struct IntArr {
 } IntArr;
 
 typedef struct Parser {
-  Token prev;
-  Token current;
+  Token prev;                 // Token previously consumed.
+  Token current;              // Current token that isn't consumed yet
   Token consumed_identifier;  // the previously consumed identifier.
   bool error;                 // was there any parse error occured?
   bool panic;                 // should the parser enter panic mode?
@@ -43,6 +47,7 @@ typedef struct Local {
 typedef enum FunctionType {
   TYPE_FUNCTION,
   TYPE_SCRIPT,
+  TYPE_METHOD,
 } FunctionType;
 
 /** Upvalue: used to resolve variables that lie outside
@@ -88,6 +93,8 @@ typedef struct Compiler {
 Parser parser;
 Chunk* compiling_chunk;
 Compiler* current = NULL;
+
+static void end_scope();
 
 bool mark_compiler_roots() {
   Compiler* compiler_it = current;
@@ -257,16 +264,19 @@ static void emit_loop(uint32_t loop_start) {
  * to the virtual machine.
  */
 static void emit_const_inst(Value val) {
-  if (chunk_get_const_pool_size(current_chunk()) + 1 > CONST_POOL_LIMIT) {
+  if (chunk_const_pool_is_full(current_chunk())) {
     error(&parser.current, "[Memory error] Too much constant in one chunk.");
   }
-
   chunk_write_load_const(current_chunk(), val, parser.prev.line);
 }
 
 static uint32_t identifier_constant(Token* tk) {
   StringObj* identifier = StringObj_construct(tk->start, tk->length);
-  return chunk_add_const(current_chunk(), OBJ_VAL(*identifier));
+  uint32_t off = chunk_add_const(current_chunk(), OBJ_VAL(*identifier));
+  if (off == CHUNK_CONST_POOL_EFULL) {
+    error(&parser.current, "[Memory error] Too much constant in one chunk.");
+  }
+  return off;
 }
 
 static void advance() {
@@ -333,13 +343,16 @@ static void consume(TokenType type, const char* msg) {
   error(&parser.current, msg);
 }
 
-static void emit_return() {
-  emit_byte(OP_NIL);
+static void emit_return(bool nil) {
+  if (nil) {
+    emit_byte(OP_NIL);
+  }
+
   emit_byte(OP_RETURN);
 }
 
 static ClosureObj* end_compiler() {
-  emit_return();
+  emit_return(true);
   FunctionObj* function = current->function;
   function->upval_count = current->upval_count;
 #ifdef DBG_DISASSEMBLE
@@ -371,6 +384,7 @@ static void block_stmt();
 static void var_declaration();
 static void fun_declaration();
 static void class_declaration();
+static void method();
 static void if_stmt();
 static void while_stmt();
 static void for_stmt();
@@ -382,6 +396,10 @@ static int parameter_list();
 static void and_();
 static void or_();
 static void call();
+
+static void emit_op_get_global(uint32_t iden_offset);
+static void emit_op_get_local(uint32_t stack_index);
+static void emit_op_get_upvalue(uint32_t upvalue_index);
 
 typedef void (*ParseFn)();  // pointer to a parsing function
 
@@ -507,9 +525,9 @@ static int resolve_upvalue(Compiler* compiler, Token* name) {
     return add_upvalue(compiler, enclosing_local, true);
   }
 
-  int enclosing_upval = resolve_upvalue(compiler->enclosing, name);
-  if (enclosing_upval != -1)
-    return add_upvalue(compiler, enclosing_upval, false);
+ int enclosing_upval = resolve_upvalue(compiler->enclosing, name);
+ if (enclosing_upval != -1)
+   return add_upvalue(compiler, enclosing_upval, false);
   return -1;
 }
 
@@ -576,21 +594,13 @@ static void variable() {
   int stack_index = resolve_local(current, &parser.prev);
   int upvalue_index = 0;
 
-  if (stack_index != -1 && stack_index <= UINT8_MAX)
-    emit_param_inst(OP_GET_LOCAL, (uint32_t)stack_index, 1);
-  else if (stack_index != -1)
-    emit_param_inst(OP_GET_LOCAL_LONG, (uint32_t)stack_index,
-                    LONG_LOCAL_OFFSET_SIZE);
-  else if ((upvalue_index = resolve_upvalue(current, &parser.prev)) != -1 &&
-           upvalue_index <= UINT8_MAX)
-    emit_param_inst(OP_GET_UPVAL, (uint32_t)upvalue_index, 1);
-  else if (upvalue_index != -1)
-    emit_param_inst(OP_GET_UPVAL_LONG, (uint32_t)upvalue_index,
-                    LONG_UPVAL_OFFSET_SIZE);
-  else if (offset <= UINT8_MAX)
-    emit_param_inst(OP_GET_GLOBAL, offset, 1);
-  else
-    emit_param_inst(OP_GET_GLOBAL, offset, LONG_CONST_OFFSET_SIZE);
+  if (stack_index != -1) {
+    emit_op_get_local(stack_index);
+  } else if ((upvalue_index = resolve_upvalue(current, &parser.prev)) != -1) {
+    emit_op_get_upvalue(upvalue_index);
+  } else {
+    emit_op_get_global(offset);
+  }
 }
 
 static void declaration() {
@@ -721,6 +731,10 @@ static int parameter_list() {
   return param_count;
 }
 
+/** function: parse function's arguments and body.
+ * this would emit OP_CLOSURE, which loads the closure object
+ * to the value stack and captures its upvalues.
+ * */
 static void function(FunctionType type) {
   Compiler compiler;
   compiler_init(&compiler, type);
@@ -749,27 +763,66 @@ static void function(FunctionType type) {
 
   for (int i = 0; i < compiler.upval_count; i++) {
     Upvalue upvalue = compiler.upvalues[i];
+    // this bytecode param hint the VM how it should read the upvalue offset.
     emit_byte(upvalue.local | (upvalue.long_offset << 1));
+
+    // TODO: replace '2' with an enum.
     emit_bytes(&(upvalue.index), (upvalue.long_offset) ? 2 : 1);
   }
 }
 
+/** class_declaration: emit instructions to define class
+ * and incrementally add defined methods to that class.
+ * */
 static void class_declaration() {
   // Offset of the identifier in the chunk's array of values
   uint32_t name_offset =
       parse_identifier("Expect an identifier after 'class'.");
   declare_variable(parser.consumed_identifier);
 
-  // Emit instruction to define a class
   if (name_offset < UINT8_MAX) {
     emit_param_inst(OP_CLASS, name_offset, 1);
   } else {
     emit_param_inst(OP_CLASS_LONG, name_offset, LONG_CONST_OFFSET_SIZE);
   }
 
-  consume(TK_LEFT_BRACE, "Expect '{' before class's body.");
-  consume(TK_RIGHT_BRACE, "Expect '}' after class's body.");
+  // initially I thought I could ignore this define_variable() call.
+  // but it's necessary to implement inheritance in the next chapter.
+  // Read the note: 'The preceding call to defineVariable()...'
+  // in the chapter 'Methods and initializers'.
   define_variable(name_offset);
+  consume(TK_LEFT_BRACE, "Expect '{' before class's body.");
+  if (current->scope_depth == 0) {
+    emit_op_get_global(name_offset);
+  }
+
+  while (!(check(TK_RIGHT_BRACE) || check(TK_EOF))) {
+    method();
+  }
+
+  consume(TK_RIGHT_BRACE, "Expect '}' after class's body.");
+  if (current->scope_depth == 0) {
+    emit_byte(OP_POP);
+  }
+}
+
+/** method: parse a method declaration.
+ * the emitted instruction would look like this:
+ * 1. OP_CLOSURE: load the closure from the constant pool and capture all
+ * upvalues.
+ * 2. OP_METHOD: Add a name - closure associtation to the class' method table.
+ * */
+static void method() {
+  if (!match(TK_FUN)) {
+    error(&parser.current, "Expect 'fun' at the start of method declaration.");
+  }
+  uint32_t off = parse_identifier("Expect method name after 'fun'.");
+  function(TYPE_METHOD);
+  if (off <= UINT8_MAX) {
+    emit_param_inst(OP_METHOD, off, 1);
+  } else {
+    emit_param_inst(OP_METHOD_LONG, off, LONG_CONST_OFFSET_SIZE);
+  }
 }
 
 static void fun_declaration() {
@@ -798,8 +851,11 @@ static void declare_variable(Token name) {
 }
 
 static void define_variable(uint32_t offset) {
-  if (current->scope_depth > 0)
+  if (current->scope_depth > 0) {
+    // local variables are referred by their indexes in the
+    // value array of the current scope.
     return;
+  }
   if (offset <= UINT8_MAX)
     emit_param_inst(OP_DEFINE_GLOBAL, offset, 1);
   else
@@ -815,9 +871,7 @@ static void define_variable(uint32_t offset) {
 static uint32_t parse_identifier(const char* error_msg) {
   consume(TK_IDENTIFIER, error_msg);
   parser.consumed_identifier = parser.prev;
-  Value identifier =
-      OBJ_VAL(*StringObj_construct(parser.prev.start, parser.prev.length));
-  return chunk_add_const(current_chunk(), identifier);
+  return identifier_constant(&parser.prev);
 }
 
 static void print_stmt() {
@@ -987,12 +1041,12 @@ static void return_stmt() {
     error(&parser.prev, "'return' outside function.");
   }
 
-  if (!check(TK_SEMICOLON))
+  bool nil = check(TK_SEMICOLON);
+  if (!nil) {
     expression();
-  else
-    emit_byte(OP_NIL);
+  }
   consume(TK_SEMICOLON, "Expect ';' after statement.");
-  emit_byte(OP_RETURN);
+  emit_return(nil);
 }
 
 // parse statements that are not declaration type
@@ -1022,7 +1076,8 @@ static void stmt() {
  * */
 static void number() {
   double literal = strtod(parser.prev.start, NULL);
-  emit_const_inst(NUMBER_VAL(literal));
+  Value num = NUMBER_VAL(literal);
+  emit_const_inst(num);
 }
 
 static void string() {
@@ -1168,4 +1223,27 @@ ClosureObj* compile(const char* source) {
   parser_free();
   ClosureObj* closure = end_compiler();
   return parser.error ? NULL : closure;
+}
+
+static void emit_op_get_global(uint32_t offset) {
+  if (offset <= UINT8_MAX)
+    emit_param_inst(OP_GET_GLOBAL, offset, 1);
+  else
+    emit_param_inst(OP_GET_GLOBAL_LONG, offset, LONG_CONST_OFFSET_SIZE);
+}
+
+static void emit_op_get_upvalue(uint32_t upvalue_index) {
+  if (upvalue_index <= UINT8_MAX)
+    emit_param_inst(OP_GET_UPVAL, (uint32_t)upvalue_index, 1);
+  else
+    emit_param_inst(OP_GET_UPVAL_LONG, (uint32_t)upvalue_index,
+                    LONG_UPVAL_OFFSET_SIZE);
+}
+
+static void emit_op_get_local(uint32_t stack_index) {
+  if (stack_index <= UINT8_MAX)
+    emit_param_inst(OP_GET_LOCAL, (uint32_t)stack_index, 1);
+  else
+    emit_param_inst(OP_GET_LOCAL_LONG, (uint32_t)stack_index,
+                    LONG_LOCAL_OFFSET_SIZE);
 }

@@ -119,24 +119,21 @@ static bool is_falsey(Value val) {
 /** Concatenate two strings that are on top of the stack.
  *  The result of the concatenation is pushed back into the stack.
  * */
-static void concatenate() {
-  StringObj* right = AS_STRING(vm_stack_peek(0));
-  StringObj* left = AS_STRING(vm_stack_peek(1));
+static Value concatenate(Value left, Value right) {
+  StringObj* sleft = AS_STRING(left);
+  StringObj* sright = AS_STRING(right);
 
-  size_t total_length = right->length + left->length;
+  size_t total_length = sright->length + sleft->length;
 
   char* concat_string = ALLOCATE(char, total_length + 1);
-  memcpy(concat_string, left->chars, left->length);
-  memcpy(concat_string + left->length, right->chars, right->length);
+  memcpy(concat_string, sleft->chars, sleft->length);
+  memcpy(concat_string + sleft->length, sright->chars, sright->length);
   concat_string[total_length] = '\0';
 
   StringObj* concat_str_obj = StringObj_construct(concat_string, total_length);
   FREE(char, concat_string);
+  return OBJ_VAL(*concat_str_obj);
 
-  vm_stack_pop();
-  vm_stack_pop();
-
-  vm_stack_push(OBJ_VAL(*concat_str_obj));
 }
 
 /* runtime_error: print out error message to stderr and reset the stack */
@@ -172,6 +169,20 @@ static void runtime_error(const char* format, ...) {
   call_frame_reset();
 }
 
+/** panic: for internal runtime errors that cannot be recovered.
+ * stop the runtime immediately.
+ * TODO: implement placeholder for graceful shutdown.
+ * */
+static void panic(const char* format, ...) {
+  va_list args;
+  fprintf(stderr, "\033[1;31m [panic] \033[0m");
+  va_start(args, format);
+  vfprintf(stderr, format, args);
+  va_end(args);
+  fputs("\n", stderr);
+  exit(-1);
+}
+
 /** read n bytes from a chunk
  * @param byte_count: number of bytes which represents the offset
  * @param pc: pointer pointing to the program counter
@@ -187,8 +198,14 @@ static uint32_t read_bytes(uint8_t** pc, uint8_t byte_count) {
   return bytes;
 }
 
-bool call_value(Value value, int param_count) {
+static bool call_value(Value value, int param_count) {
   if (!callable(value)) {
+    return false;
+  }
+
+  // Check if the frame stack is overflow
+  if (vm.frame_count >= CALL_FRAME_MAX) {
+    runtime_error("Stack overflow.");
     return false;
   }
 
@@ -198,12 +215,6 @@ bool call_value(Value value, int param_count) {
     if (param_count != closure->function->arity) {
       runtime_error("Expect %d parameters but got %d.",
                     closure->function->arity, param_count);
-      return false;
-    }
-
-    // Check if the frame stack is overflow
-    if (vm.frame_count >= CALL_FRAME_MAX) {
-      runtime_error("Stack overflow.");
       return false;
     }
 
@@ -226,17 +237,17 @@ bool call_value(Value value, int param_count) {
     }
     vm.stack_top -= param_count + 1;
     vm_stack_push(res);
+  } else if (IS_BOUND_METHOD_OBJ(value)) {
+    BoundMethodObj* bmethod = AS_BOUND_METHOD(value);
+    ClosureObj* method = bmethod->method;
+
+    // TODO: Handle 'this'
+    CallFrame* new_frame = &vm.frames[vm.frame_count++];
+    new_frame->closure = method;
+    new_frame->pc = method->function->chunk.bytecodes;
+    new_frame->slots = vm.stack_top - param_count - 1;
   }
 
-  return true;
-}
-
-bool call_class_constructor(ClassObj* class_obj, int param_count) {
-  assert(param_count == 0);
-  vm_stack_pop();  // Pop the class object.
-  InstanceObj* new_instance = InstanceObj_construct(class_obj);
-  Value val = OBJ_VAL(*new_instance);
-  vm_stack_push(val);
   return true;
 }
 
@@ -335,15 +346,17 @@ static InterpretResult run() {
         return INTERPRET_OK;
       case OP_RETURN: {
         Value return_value = vm_stack_pop();
-        vm.frame_count--;
-        if (vm.frame_count == 0) {
+        if (vm.frame_count == 1) {
+          vm.frame_count = 0;
           vm_stack_pop();  // pop the top-level function
           return INTERPRET_OK;
         }
 
-        vm.stack_top = vm.frames[vm.frame_count].slots;
-        vm_stack_push(return_value);
+        vm.stack_top = frame->slots;
+        vm.frame_count--;
         frame = &vm.frames[vm.frame_count - 1];
+        vm_stack_push(return_value);
+        close_upvalues(vm.stack_top);
         break;
       }
       case OP_CONST:
@@ -381,26 +394,27 @@ static InterpretResult run() {
         break;
       }
       case OP_ADD: {
-        Value right = vm_stack_peek(0);
         Value left = vm_stack_peek(1);
+        Value right = vm_stack_peek(0);
+        Value result;
 
-        bool bothAreNums = right.type == VAL_NUMBER && left.type == VAL_NUMBER;
-        bool bothAreStrings =
-            OBJ_TYPE(right) == OBJ_STRING && OBJ_TYPE(left) == OBJ_STRING;
+        bool are_nums = right.type == VAL_NUMBER && left.type == VAL_NUMBER;
+        bool are_strs = OBJ_TYPE(right) == OBJ_STRING && OBJ_TYPE(left) == OBJ_STRING;
 
-        if (!(bothAreNums || bothAreStrings)) {
-          runtime_error("Both operands must be strings or numbers");
+        if (!(are_nums || are_strs)) {
+          runtime_error("Both operands must be either strings or numbers");
           return INTERPRET_RUNTIME_ERROR;
         }
 
         if (right.type == VAL_NUMBER) {
-          vm_stack_pop();
-          vm_stack_pop();
-          vm_stack_push(NUMBER_VAL(AS_NUMBER(right) + AS_NUMBER(left)));
-        } else
-          /* concatenate two strings
-           * both operands are popped in the function */
-          concatenate();
+          result = NUMBER_VAL(AS_NUMBER(left) + AS_NUMBER(right));
+        } else {
+          result = concatenate(left, right);
+        }
+
+        vm_stack_pop();
+        vm_stack_pop();
+        vm_stack_push(result);
         break;
       }
       case OP_SUBTRACT:
@@ -425,6 +439,9 @@ static InterpretResult run() {
         BINARY_OP(BOOL_VAL, >);
         break;
       case META_LINE_NUM:
+        // TODO(line number): remove META_LINE_NUM opcode
+        // a possible solution is a data structure like
+        // line-number table of cpython (lnotab)
         READ_SHORT();
         break;
       case OP_PRINT: {
@@ -526,6 +543,10 @@ static InterpretResult run() {
       }
       case OP_CLOSURE:
       case OP_CLOSURE_LONG: {
+        /** Load the closure object from the constant pool and
+         * capture all upvalues that are refered during the closure
+         * execution.
+         * */
         Value closure_val =
             (inst == OP_CLOSURE) ? READ_CONST() : READ_CONST_LONG();
         vm_stack_push(closure_val);
@@ -534,6 +555,7 @@ static InterpretResult run() {
         for (int i = 0; i < closure->function->upval_count; i++) {
           uint8_t upval_info = READ_BYTE();
 
+          // TODO(closure): this is unecessary. one bit flag is enough.
           bool local = upval_info & 1;  // Extract the first bit (LSB)
           bool long_offset =
               (upval_info & (1 << 1)) >> 1;  // Extract the second bit
@@ -588,6 +610,10 @@ static InterpretResult run() {
          * operation is completed, the instance will be popped from the
          * stack and the property value of the instance will be pushed into
          * the stack.
+         *
+         * In the case the resolved identity is not a field but a method (which
+         * is of type closure), the operation returns a bound method object.
+         *
          * ============= Bytecode Format =============
          * OP_GET_PROPERTY     	<1-byte offset>
          * OP_GET_PROPERTY_LONG <3-byte offset>
@@ -595,8 +621,7 @@ static InterpretResult run() {
          * <offset>: Offset of the string representing the property's name
          * in the value array.
          * */
-        Value property_name_val =
-            (inst == OP_GET_PROPERTY) ? READ_CONST() : READ_CONST_LONG();
+        Value name = (inst == OP_GET_PROPERTY) ? READ_CONST() : READ_CONST_LONG();
         Value top = vm_stack_peek(0);
         if (!IS_INSTANCE_OBJ(top)) {
           runtime_error("Only instances have properties.");
@@ -604,17 +629,26 @@ static InterpretResult run() {
         }
 
         InstanceObj* instance = AS_INSTANCE(vm_stack_peek(0));
-        Value property;
-        bool exist = table_get(&instance->fields, AS_STRING(property_name_val),
-                               &property);
-        if (!exist) {
+        Value property, method;
+
+        // try property look-up first, then method look-up
+        if (table_get(&instance->fields, AS_STRING(name), &property)) {
+          vm_stack_pop();  // Pop the class instance.
+          vm_stack_push(property);
+        } else if (table_get(&instance->klass->methods, AS_STRING(name), &method)) {
+          if (!IS_CLOSURE_OBJ(method)) {
+            panic("method must be a closure.");
+          }
+
+          BoundMethodObj* bmethod = BoundMethodObj_construct(top, AS_CLOSURE(method));
+          vm_stack_pop();
+          vm_stack_push(OBJ_VAL(*bmethod));
+        } else {
           StringObj* class_name = instance->klass->name;
           runtime_error("'%s' object has no property '%s'.", class_name->chars,
-                        AS_CSTRING(property_name_val));
+                        AS_CSTRING(name));
           return INTERPRET_RUNTIME_ERROR;
         }
-        vm_stack_pop();  // Pop the class instance.
-        vm_stack_push(property);
         break;
       }
       case OP_SET_PROPERTY:
@@ -644,6 +678,49 @@ static InterpretResult run() {
         rhs_value = vm_stack_pop();
         vm_stack_pop();
         vm_stack_push(rhs_value);
+        break;
+      }
+      case OP_METHOD:
+      case OP_METHOD_LONG: {
+        /** OP_METHOD/OP_METHOD_LONG adds the closure at the top of the
+         * value stack to the method table of the class object next to
+         * that closure. It takes the method name's offset in the constant
+         * pool as the argument.
+         *
+         * Value stack's pre-condition:
+         * == Stack ==
+         * ... <class> <closure>
+         * ===========
+         *
+         * Value stack's post-condition:
+         * == Stack ==
+         * ... <class>
+         * ===========
+         * */
+
+        Value method_name_val =
+            (inst == OP_METHOD) ? READ_CONST() : READ_CONST_LONG();
+        if (!(IS_CLASS_OBJ(vm_stack_peek(1)) &&
+              IS_CLOSURE_OBJ(vm_stack_peek(0)) &&
+              IS_STRING_OBJ(method_name_val))) {
+          panic("OP_METHOD's pre-condition check fails.");
+        }
+
+        StringObj* method_name = AS_STRING(method_name_val);
+        ClassObj* klass = AS_CLASS(vm_stack_peek(1));
+        ClosureObj* method = AS_CLOSURE(vm_stack_peek(0));
+
+        bool exist = table_set(&klass->methods, method_name, OBJ_VAL(method->obj));
+        if (exist) {
+          // deleting the class from global variable table,
+          // if it's defined globally
+          table_delete(&vm.globals, klass->name, NULL);
+          runtime_error("Duplicate method name ('%s') in class '%s'.",
+                        method_name->chars, klass->name->chars);
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        vm_stack_pop();
         break;
       }
     }

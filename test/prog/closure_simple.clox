@@ -1,0 +1,32 @@
+fun newAdder(x) {
+  fun _adder(y) {
+    return x + y;
+  }
+
+  return _adder;
+}
+
+var addOne = newAdder(1);
+print addOne;
+print addOne(200);
+
+fun newTripleAdder(x, y) {
+  {
+    var y1 = y;
+    {
+      var x1 = x;
+      {
+        fun adder(z) {
+          return x1 + y1 + z;
+        }
+
+        return adder;
+      }
+    }
+  }
+}
+
+var adder = newTripleAdder(101, 102);
+if (adder(103) == 101 + 102 + 103) {
+  print "OK";
+}
