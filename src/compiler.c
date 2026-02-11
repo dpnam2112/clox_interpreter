@@ -94,6 +94,8 @@ Parser parser;
 Chunk* compiling_chunk;
 Compiler* current = NULL;
 
+static void end_scope();
+
 bool mark_compiler_roots() {
   Compiler* compiler_it = current;
   while (compiler_it != NULL) {
@@ -341,13 +343,16 @@ static void consume(TokenType type, const char* msg) {
   error(&parser.current, msg);
 }
 
-static void emit_return() {
-  emit_byte(OP_NIL);
+static void emit_return(bool nil) {
+  if (nil) {
+    emit_byte(OP_NIL);
+  }
+
   emit_byte(OP_RETURN);
 }
 
 static ClosureObj* end_compiler() {
-  emit_return();
+  emit_return(true);
   FunctionObj* function = current->function;
   function->upval_count = current->upval_count;
 #ifdef DBG_DISASSEMBLE
@@ -520,9 +525,9 @@ static int resolve_upvalue(Compiler* compiler, Token* name) {
     return add_upvalue(compiler, enclosing_local, true);
   }
 
-  int enclosing_upval = resolve_upvalue(compiler->enclosing, name);
-  if (enclosing_upval != -1)
-    return add_upvalue(compiler, enclosing_upval, false);
+ int enclosing_upval = resolve_upvalue(compiler->enclosing, name);
+ if (enclosing_upval != -1)
+   return add_upvalue(compiler, enclosing_upval, false);
   return -1;
 }
 
@@ -1036,12 +1041,12 @@ static void return_stmt() {
     error(&parser.prev, "'return' outside function.");
   }
 
-  if (!check(TK_SEMICOLON))
+  bool nil = check(TK_SEMICOLON);
+  if (!nil) {
     expression();
-  else
-    emit_byte(OP_NIL);
+  }
   consume(TK_SEMICOLON, "Expect ';' after statement.");
-  emit_byte(OP_RETURN);
+  emit_return(nil);
 }
 
 // parse statements that are not declaration type
@@ -1071,7 +1076,8 @@ static void stmt() {
  * */
 static void number() {
   double literal = strtod(parser.prev.start, NULL);
-  emit_const_inst(NUMBER_VAL(literal));
+  Value num = NUMBER_VAL(literal);
+  emit_const_inst(num);
 }
 
 static void string() {

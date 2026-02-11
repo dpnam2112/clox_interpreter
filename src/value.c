@@ -53,6 +53,9 @@ void print_value(Value val) {
     case VAL_BOOL:
       printf((AS_BOOL(val)) ? "true" : "false");
       break;
+    case VAL_NUMBER:
+      printf("%g", AS_NUMBER(val));
+      break;
     case VAL_NIL:
       printf("nil");
       break;
@@ -60,7 +63,7 @@ void print_value(Value val) {
       print_object(val);
       break;
     default:
-      printf("%g", AS_NUMBER(val));
+      printf("<?\?>");
   }
 }
 
@@ -120,6 +123,7 @@ bool callable(Value val) {
     case OBJ_CLOSURE:
     case OBJ_NATIVE_FN:
     case OBJ_CLASS:
+    case OBJ_BOUND_METHOD:
       return true;
     default:
       return false;

@@ -1,0 +1,8 @@
+'test a simple method...'
+'OK'
+'test passing an argument to a method...'
+'OK'
+'simple bound method test...'
+'OK'
+'test returning a closure from a method...'
+'OK'

@@ -37,13 +37,49 @@ typedef struct {
   Value* stack_top;
   Obj* objects;
 
-  /**All Upvalues in the list are sorted by the address of
-   * the value they references to.
-   * This means that the first upvalue of the list (the head) always
-   * references to the outermost upvalue inside the stack.
-   * When the program counter escapes a scope, if there is any variables used
-   * by a outside function, those variables need to be moved to the heap. We
-   * use this linked list to track which upvalues need to be moved to the heap.
+  /** Upvalues all scoped variables refered by closures.
+   *
+   * Initially, these upvalues only refer to these variables by pointers
+   * (Value* value).
+   *
+   * When the VM exits a scope, these local variables will be destroyed.
+   * To keep them alive, they will be 'closed' -- put inside their
+   * respective upvalues -- after the scope ends.
+   *
+   * The list of upvalues are sorted by the addresses of local variables they
+   * refer to, in ascending order. For example: if the scope looks like
+   * this:
+   *
+   * {
+   *    var a = 1;
+   *    var c = 3;
+   *    var b = 2;
+   *
+   *    fun getB() {
+   *      return b;
+   *    }
+   *
+   *    fun getA() {
+   *      return a;
+   *    }
+   * }
+   *
+   * Then, the value stack when this scope is executed looks like this: 
+   * value stack: [a] [b] [getB] [getA]
+   *
+   * In this case, only 'a' and 'b' are refered inside functions. Then, there
+   * are two upvalues refering two them and they are ordered by the addresses 
+   * of their counterpart in the value stack:
+   *
+   * Open upvalues: [Upvalue (referring to a)] [Upvalue (referring to b)]
+   *
+   * When the scope exits, OP_CLOSE_UPVAL is executed and the upvalues
+   * hold values of the local variables they refer to:
+   *
+   * Closure's upvalue array: [Upvalue holding a] [Upvalue holding b]
+   *
+   * When the closures are invoked outside the destroyed scope,
+   * They use the captured values which put in their upvalue array.
    * */
   UpvalueObj* open_upvalues;
 
