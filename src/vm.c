@@ -221,7 +221,7 @@ static bool call_value(Value value, int param_count) {
     CallFrame* new_frame = &vm.frames[vm.frame_count++];
     new_frame->closure = closure;
     new_frame->pc = closure->function->chunk.bytecodes;
-    new_frame->slots = vm.stack_top - param_count - 1;
+    new_frame->slots = vm.stack_top - param_count- 1;
   } else if (IS_CLASS_OBJ(value)) {
     ClassObj* class_obj = AS_CLASS(value);
     InstanceObj* new_instance = InstanceObj_construct(class_obj);
