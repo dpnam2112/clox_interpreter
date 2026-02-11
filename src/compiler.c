@@ -635,18 +635,27 @@ static void if_stmt() {
   consume(TK_LEFT_PAREN, "Expect '(' after 'if'.");
   expression();
   consume(TK_RIGHT_PAREN, "Expect ')' after condition.");
-  uint32_t jmp_then = emit_jump(OP_JMP_IF_FALSE);
+  // this jump exits the 'then' block and
+  // enter the else block.
+  uint32_t to_else = emit_jump(OP_JMP_IF_FALSE);
+
+  // then block
+  emit_byte(OP_POP);
   stmt();
   if (match(TK_ELSE)) {
-    uint32_t jmp_else = emit_jump(OP_JMP);
-    patch_jump(jmp_then);
+    // this jump skip the else block when then block
+    // finishes.
+    uint32_t to_exit = emit_jump(OP_JMP);
+    // patch to-else jump
+    patch_jump(to_else);
+    emit_byte(OP_POP);
     stmt();
-    patch_jump(jmp_else);
-  } else
-    patch_jump(jmp_then);
 
-  // pop the condition expression's result
-  emit_byte(OP_POP);
+    // patch the exit jump
+    patch_jump(to_exit);
+  } else {
+    patch_jump(to_else);
+  }
 }
 
 static void and_() {
