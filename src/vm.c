@@ -116,6 +116,12 @@ static bool is_falsey(Value val) {
   return IS_NIL(val) || (IS_BOOL(val) && !AS_BOOL(val));
 }
 
+static inline uint16_t read_short(CallFrame* frame) {
+  uint16_t v = *((uint16_t*) frame->pc);
+  frame->pc += 2;
+  return v;
+}
+
 /** Concatenate two strings that are on top of the stack.
  *  The result of the concatenation is pushed back into the stack.
  * */
@@ -309,7 +315,7 @@ static InterpretResult run() {
   CallFrame* frame = &vm.frames[vm.frame_count - 1];
 
 #define READ_BYTE() *(frame->pc++)
-#define READ_SHORT() (frame->pc += 2, *((uint16_t*)(frame->pc - 2)))
+#define READ_SHORT() (read_short(frame))
 #define READ_BYTES(n) read_bytes(&(frame->pc), n)
 #define READ_CONST() \
   frame->closure->function->chunk.constants.values[READ_BYTE()]
