@@ -4,3 +4,5 @@
 'OK'
 'Test returning closure inside nested scopes...'
 'OK'
+'Test multiple upvalues...'
+'OK'
