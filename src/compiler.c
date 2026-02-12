@@ -642,20 +642,23 @@ static void if_stmt() {
   // then block
   emit_byte(OP_POP);
   stmt();
+  uint32_t then_to_exit = emit_jump(OP_JMP);
+
   if (match(TK_ELSE)) {
     // this jump skip the else block when then block
     // finishes.
-    uint32_t to_exit = emit_jump(OP_JMP);
+    uint32_t else_to_exit = emit_jump(OP_JMP);
     // patch to-else jump
     patch_jump(to_else);
     emit_byte(OP_POP);
     stmt();
-
     // patch the exit jump
-    patch_jump(to_exit);
+    patch_jump(else_to_exit);
+    patch_jump(then_to_exit);
   } else {
     patch_jump(to_else);
     emit_byte(OP_POP);
+    patch_jump(then_to_exit);
   }
 }
 
