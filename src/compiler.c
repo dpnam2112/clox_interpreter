@@ -655,6 +655,7 @@ static void if_stmt() {
     patch_jump(to_exit);
   } else {
     patch_jump(to_else);
+    emit_byte(OP_POP);
   }
 }
 
