@@ -1,0 +1,41 @@
+print "test: simple getter and setter";
+
+class Student {
+  fun setAge(age) {
+    this.age = age;
+  }
+
+  fun getAge(age) {
+    return this.age;
+  }
+}
+
+var harry = Student();
+harry.setAge(17);
+if (harry.age == 17) {
+  print "OK";
+} else {
+  print "Failed";
+}
+
+print "test: use of 'this' inside closure";
+class Student {
+  fun newAgeSetter() {
+    fun setAge(age) {
+      this.age = age;
+    }
+    return setAge;
+  }
+}
+
+var harry = Student();
+var ageSetter = harry.newAgeSetter();
+ageSetter(22);
+var check1 = harry.age == 22;
+ageSetter(25);
+var check2 = harry.age == 25;
+if (check1 and check2) {
+  print "OK";
+} else {
+  print "Failed";
+}

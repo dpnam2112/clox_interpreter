@@ -1,0 +1,4 @@
+'test: simple getter and setter'
+'OK'
+'test: use of 'this' inside closure'
+'OK'

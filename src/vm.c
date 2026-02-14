@@ -205,6 +205,20 @@ static uint32_t read_bytes(uint8_t** pc, uint8_t byte_count) {
   return bytes;
 }
 
+static CallFrame* stack_call_frame(ClosureObj* closure, int param_count) {
+  if (param_count != closure->function->arity) {
+    runtime_error("Expect %d parameters but got %d.",
+                  closure->function->arity, param_count);
+    return NULL;
+  }
+
+  CallFrame* new_frame = &vm.frames[vm.frame_count++];
+  new_frame->closure = closure;
+  new_frame->pc = closure->function->chunk.bytecodes;
+  new_frame->slots = vm.stack_top - param_count - 1;
+  return new_frame;
+}
+
 static bool call_value(Value value, int param_count) {
   if (!callable(value)) {
     return false;
@@ -218,17 +232,11 @@ static bool call_value(Value value, int param_count) {
 
   if (IS_CLOSURE_OBJ(value)) {
     ClosureObj* closure = AS_CLOSURE(value);
-    // Check number of parameters
-    if (param_count != closure->function->arity) {
-      runtime_error("Expect %d parameters but got %d.",
-                    closure->function->arity, param_count);
+    if(!stack_call_frame(closure, param_count)) {
       return false;
     }
 
-    CallFrame* new_frame = &vm.frames[vm.frame_count++];
-    new_frame->closure = closure;
-    new_frame->pc = closure->function->chunk.bytecodes;
-    new_frame->slots = vm.stack_top - param_count - 1;
+    // Check number of parameters
   } else if (IS_CLASS_OBJ(value)) {
     ClassObj* class_obj = AS_CLASS(value);
     InstanceObj* new_instance = InstanceObj_construct(class_obj);
@@ -247,12 +255,12 @@ static bool call_value(Value value, int param_count) {
   } else if (IS_BOUND_METHOD_OBJ(value)) {
     BoundMethodObj* bmethod = AS_BOUND_METHOD(value);
     ClosureObj* method = bmethod->method;
+    CallFrame* new_frame = stack_call_frame(method, param_count);
+    if (!new_frame) {
+      return false;
+    }
 
-    // TODO: Handle 'this'
-    CallFrame* new_frame = &vm.frames[vm.frame_count++];
-    new_frame->closure = method;
-    new_frame->pc = method->function->chunk.bytecodes;
-    new_frame->slots = vm.stack_top - param_count - 1;
+    new_frame->slots[0] = bmethod->receiver;
   }
 
   return true;
@@ -359,11 +367,11 @@ static InterpretResult run() {
           return INTERPRET_OK;
         }
 
+        close_upvalues(frame->slots);
         vm.stack_top = frame->slots;
         vm.frame_count--;
         frame = &vm.frames[vm.frame_count - 1];
         vm_stack_push(return_value);
-        close_upvalues(vm.stack_top);
         break;
       }
       case OP_CONST:
@@ -681,6 +689,12 @@ static InterpretResult run() {
          * */
         Value property_name_val =
             (inst == OP_SET_PROPERTY) ? READ_CONST() : READ_CONST_LONG();
+
+        if (!IS_INSTANCE_OBJ(vm_stack_peek(1))) {
+          runtime_error("Only instances have properties.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
         Value rhs_value = vm_stack_peek(0);
         InstanceObj* instance = AS_INSTANCE(vm_stack_peek(1));
         table_set(&(instance->fields), AS_STRING(property_name_val), rhs_value);
