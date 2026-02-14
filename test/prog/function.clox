@@ -68,3 +68,23 @@ if (helloRet == nil) {
     print "hello failed";
 }
 print "== Void function test done ==";
+
+print "== Test: Fibonacci inside scope ==";
+{
+  var scopedFib = 1;
+ {
+    fun scopedFib(n) {
+        if (n < 2) {
+            return n;
+        }
+
+        return scopedFib(n - 1) + scopedFib(n - 2);
+    }
+
+    print scopedFib(0); // 0
+    print scopedFib(1); // 1
+    print scopedFib(10); // 55
+    print scopedFib(15); // 610
+    print scopedFib(21); // 10946
+ }
+}

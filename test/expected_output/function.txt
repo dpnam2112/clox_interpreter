@@ -22,3 +22,9 @@
 'hello, Nam'
 'hello OK'
 '== Void function test done =='
+'== Test: Fibonacci inside scope =='
+0
+1
+55
+610
+10946

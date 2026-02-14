@@ -83,6 +83,10 @@ typedef struct Compiler {
   int upval_count;
 } Compiler;
 
+typedef struct ClassCompiler {
+  struct ClassCompiler* enclosing;
+} ClassCompiler;
+
 typedef void (*ParseFn)();
 typedef struct ParseRule {
   // prefix: invoked if the current operation is prefix
@@ -119,6 +123,7 @@ static int parameter_list();
 static void and_();
 static void or_();
 static void call();
+static void this_();
 static void emit_op_get_global(uint32_t iden_offset);
 static void emit_op_get_local(uint32_t stack_index);
 static void emit_op_get_upvalue(uint32_t upvalue_index);
@@ -161,7 +166,7 @@ ParseRule parse_rules[] = {
     [TK_PRINT] = {NULL, NULL, PREC_NONE},
     [TK_RETURN] = {NULL, NULL, PREC_NONE},
     [TK_SUPER] = {NULL, NULL, PREC_NONE},
-    [TK_THIS] = {NULL, NULL, PREC_NONE},
+    [TK_THIS] = {this_, NULL, PREC_NONE},
     [TK_VAR] = {NULL, NULL, PREC_NONE},
     [TK_WHILE] = {NULL, NULL, PREC_NONE},
     [TK_ERROR] = {NULL, NULL, PREC_NONE},
@@ -171,6 +176,7 @@ ParseRule parse_rules[] = {
 Parser parser;
 Chunk* compiling_chunk;
 Compiler* current = NULL;
+ClassCompiler* cur_cls = NULL;
 
 bool mark_compiler_roots() {
   Compiler* compiler_it = current;
@@ -259,24 +265,25 @@ static int add_upvalue(Compiler* compiler, int index, bool local) {
   return compiler->upval_count++;
 }
 
-/** compiler_init: initialize a new compiler used to
- * compile function body.
- */
 static void compiler_init(Compiler* compiler, FunctionType type) {
   compiler->function = FunctionObj_construct();
   compiler->func_type = type;
   compiler->enclosing = current;
-  compiler->scope_depth = compiler->local_count = 0;
+  compiler->scope_depth = 0;
+  compiler->local_count = 0;
   if (type != TYPE_SCRIPT) {
     compiler->function->name = StringObj_construct(
         parser.consumed_identifier.start, parser.consumed_identifier.length);
   }
   compiler->upval_count = 0;
-
   current = compiler;
 
-  // dummy local
-  add_local((Token){TK_EOF, "", 0, 0});
+  // reserve the first slot for VM's internal use
+  if (type == TYPE_METHOD) {
+    add_local((Token){TK_THIS, "this", 4, 0});
+  } else {
+    add_local((Token){TK_EOF, "", 0, 0});
+  }
 }
 
 void parser_init() {
@@ -409,7 +416,7 @@ static bool match(TokenType type) {
  *
  * throw an error to stderr if the next token does not
  * belong to @type
- * */
+ */
 static void consume(TokenType type, const char* msg) {
   if (parser.current.type == type) {
     advance();
@@ -458,7 +465,7 @@ static bool identifier_equal(Token* tk_1, Token* tk_2) {
 /* parse_precedence: parse the expression whose precedence is
  * not lower than @prec
  * @prec: precedence's lower bound
- * */
+ */
 static void parse_precedence(Precedence prec) {
   // a valid expression always start with a prefix expression
   // or a literal. E.g: -1, a + 1, b.a, .etc
@@ -658,6 +665,15 @@ static void or_() {
   patch_jump(jmp_out);
 }
 
+static void this_() {
+  if (cur_cls == NULL) {
+    error(&parser.prev, "Can't use 'this' outside of a class.");
+    return;
+  }
+
+  variable();
+}
+
 /* var_declaration(): parse the var declaration statement
  * Bytecode form:<EXPRESSION> OP_DEFINE <OFFSET>, where
  *
@@ -734,11 +750,12 @@ static void function(FunctionType type) {
   begin_scope();
 
   consume(TK_LEFT_PAREN, "Expect '(' after function name.");
-  uint8_t param_count = 0;
+  int param_count = 0;
   if (!check(TK_RIGHT_PAREN)) {
     do {
-      if (param_count == UINT8_MAX)
+      if (param_count >= MAX_CALLARGS) {
         error(&parser.prev, "Exceed limit of number of parameters.");
+      }
       uint32_t name = parse_identifier("Expect parameter's name.");
       declare_variable(parser.consumed_identifier);
       define_variable(name);
@@ -756,11 +773,8 @@ static void function(FunctionType type) {
 
   for (int i = 0; i < compiler.upval_count; i++) {
     Upvalue upvalue = compiler.upvalues[i];
-    // this bytecode param hint the VM how it should read the upvalue offset.
     emit_byte(upvalue.local | (upvalue.long_offset << 1));
-
-    // TODO: replace '2' with an enum.
-    emit_bytes(&(upvalue.index), (upvalue.long_offset) ? 2 : 1);
+    emit_bytes(&(upvalue.index), (upvalue.long_offset) ? LONG_UPVAL_OFFSET_SIZE : 1);
   }
 }
 
@@ -778,6 +792,10 @@ static void class_declaration() {
   } else {
     emit_param_inst(OP_CLASS_LONG, name_offset, LONG_CONST_OFFSET_SIZE);
   }
+
+  ClassCompiler cls_cmpl;
+  cls_cmpl.enclosing = cur_cls;
+  cur_cls = &cls_cmpl;
 
   // initially I thought I could ignore this define_variable() call.
   // but it's necessary to implement inheritance in the next chapter.

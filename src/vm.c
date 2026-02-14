@@ -556,10 +556,8 @@ static InterpretResult run() {
         for (int i = 0; i < closure->function->upval_count; i++) {
           uint8_t upval_info = READ_BYTE();
 
-          // TODO(closure): this is unecessary. one bit flag is enough.
-          bool local = upval_info & 1;  // Extract the first bit (LSB)
-          bool long_offset =
-              (upval_info & (1 << 1)) >> 1;  // Extract the second bit
+          bool local = upval_info & 1;
+          bool long_offset = (upval_info & (1 << 1)) >> 1;
 
           uint32_t upvalue_pos = (long_offset) ? READ_BYTES(2) : READ_BYTE();
 
