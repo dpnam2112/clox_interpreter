@@ -182,6 +182,12 @@ static void panic(const char* format, ...) {
   exit(-1);
 }
 
+static inline uint16_t read_short(CallFrame* frame) {
+  uint16_t val = *((uint16_t*) frame->pc);
+  frame->pc += sizeof(uint16_t);
+  return val;
+}
+
 /** read n bytes from a chunk
  * @param byte_count: number of bytes which represents the offset
  * @param pc: pointer pointing to the program counter
@@ -190,6 +196,7 @@ static void panic(const char* format, ...) {
  * return value: positive integer value
  */
 static uint32_t read_bytes(uint8_t** pc, uint8_t byte_count) {
+  // TODO: declare its prototype as read_short's
   if (byte_count > 4)
     byte_count = 4;
   uint32_t bytes = 0;
@@ -309,7 +316,7 @@ static InterpretResult run() {
   CallFrame* frame = &vm.frames[vm.frame_count - 1];
 
 #define READ_BYTE() *(frame->pc++)
-#define READ_SHORT() (frame->pc += 2, *((uint16_t*)(frame->pc - 2)))
+#define READ_SHORT() (read_short(frame))
 #define READ_BYTES(n) read_bytes(&(frame->pc), n)
 #define READ_CONST() \
   frame->closure->function->chunk.constants.values[READ_BYTE()]
