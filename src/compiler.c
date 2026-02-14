@@ -67,34 +67,110 @@ typedef struct Upvalue {
   bool long_offset;
 } Upvalue;
 
-// This struct is used to compile function body.
-// After the function body is compiled, end_compiler()
-// is called to return a function object that represents
-// the compiled function.
-// Top-level script can be considered as a function, so
-// this struct is also used to compile top-level script.
+/** Compiler: stores states during the compilation process
+ * of a function or the global script, which also can be
+ * considered as a function. it mimicks the VM's behavior
+ * during runtime.
+ */
 typedef struct Compiler {
-  // @enclosing: refers to the compiler that compiles
-  // the function enclosing the current function
   struct Compiler* enclosing;
   FunctionObj* function;
   FunctionType func_type;
-
-  // This field (@locals) is used to resolve variables
-  // inside scopes.
   Local locals[MAX_LOCALVAR];
   int local_count;
   int scope_depth;
-
   Upvalue upvalues[MAX_UPVALUE];
   int upval_count;
 } Compiler;
 
+typedef void (*ParseFn)();
+typedef struct ParseRule {
+  // prefix: invoked if the current operation is prefix
+  ParseFn prefix;
+  // infix: invoked if the current operation is infix
+  ParseFn infix;
+  // prec: precedence associated to the current infix operation
+  Precedence prec;
+} ParseRule;
+
+static void dot();
+static void unary();
+static void binary();
+static void grouping();
+static void number();
+static void literal();
+static void string();
+static void variable();
+static void assignment();
+static void stmt();
+static void block_stmt();
+static void var_declaration();
+static void fun_declaration();
+static void class_declaration();
+static void method();
+static void if_stmt();
+static void while_stmt();
+static void for_stmt();
+static void break_stmt();
+static uint32_t parse_identifier(const char* error_msg);
+static void declare_variable(Token name);
+static void define_variable(uint32_t offset);
+static int parameter_list();
+static void and_();
+static void or_();
+static void call();
+static void emit_op_get_global(uint32_t iden_offset);
+static void emit_op_get_local(uint32_t stack_index);
+static void emit_op_get_upvalue(uint32_t upvalue_index);
+static void end_scope();
+
+/* parse_rules: a mapping from operators to appropiate parsing rules */
+ParseRule parse_rules[] = {
+    [TK_TRUE] = {literal, NULL, PREC_PRIMARY},
+    [TK_FALSE] = {literal, NULL, PREC_PRIMARY},
+    [TK_NIL] = {literal, NULL, PREC_PRIMARY},
+    [TK_LEFT_PAREN] = {grouping, call, PREC_CALL},
+    [TK_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
+    [TK_LEFT_BRACE] = {NULL, NULL, PREC_NONE},
+    [TK_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
+    [TK_COMMA] = {NULL, NULL, PREC_NONE},
+    [TK_DOT] = {NULL, dot, PREC_CALL},
+    [TK_MINUS] = {unary, binary, PREC_TERM},
+    [TK_PLUS] = {NULL, binary, PREC_TERM},
+    [TK_SEMICOLON] = {NULL, NULL, PREC_NONE},
+    [TK_SLASH] = {NULL, binary, PREC_FACTOR},
+    [TK_STAR] = {NULL, binary, PREC_FACTOR},
+    [TK_BANG] = {unary, NULL, PREC_UNARY},
+    [TK_BANG_EQUAL] = {NULL, binary, PREC_EQUALITY},
+    [TK_EQUAL] = {NULL, assignment, PREC_ASSIGNMENT},
+    [TK_EQUAL_EQUAL] = {NULL, binary, PREC_EQUALITY},
+    [TK_GREATER] = {NULL, binary, PREC_COMPARISON},
+    [TK_GREATER_EQUAL] = {NULL, binary, PREC_COMPARISON},
+    [TK_LESS] = {NULL, binary, PREC_COMPARISON},
+    [TK_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
+    [TK_IDENTIFIER] = {variable, NULL, PREC_NONE},
+    [TK_STRING] = {string, NULL, PREC_PRIMARY},
+    [TK_NUMBER] = {number, NULL, PREC_PRIMARY},
+    [TK_AND] = {NULL, and_, PREC_AND},
+    [TK_CLASS] = {NULL, NULL, PREC_NONE},
+    [TK_ELSE] = {NULL, NULL, PREC_NONE},
+    [TK_FOR] = {NULL, NULL, PREC_NONE},
+    [TK_FUN] = {NULL, NULL, PREC_NONE},
+    [TK_IF] = {NULL, NULL, PREC_NONE},
+    [TK_OR] = {NULL, or_, PREC_OR},
+    [TK_PRINT] = {NULL, NULL, PREC_NONE},
+    [TK_RETURN] = {NULL, NULL, PREC_NONE},
+    [TK_SUPER] = {NULL, NULL, PREC_NONE},
+    [TK_THIS] = {NULL, NULL, PREC_NONE},
+    [TK_VAR] = {NULL, NULL, PREC_NONE},
+    [TK_WHILE] = {NULL, NULL, PREC_NONE},
+    [TK_ERROR] = {NULL, NULL, PREC_NONE},
+    [TK_EOF] = {NULL, NULL, PREC_NONE},
+};
+
 Parser parser;
 Chunk* compiling_chunk;
 Compiler* current = NULL;
-
-static void end_scope();
 
 bool mark_compiler_roots() {
   Compiler* compiler_it = current;
@@ -370,89 +446,6 @@ static ClosureObj* end_compiler() {
   return closure;
 }
 
-static void dot();
-static void unary();
-static void binary();
-static void grouping();
-static void number();
-static void literal();
-static void string();
-static void variable();
-static void assignment();
-static void stmt();
-static void block_stmt();
-static void var_declaration();
-static void fun_declaration();
-static void class_declaration();
-static void method();
-static void if_stmt();
-static void while_stmt();
-static void for_stmt();
-static void break_stmt();
-static uint32_t parse_identifier(const char* error_msg);
-static void declare_variable(Token name);
-static void define_variable(uint32_t offset);
-static int parameter_list();
-static void and_();
-static void or_();
-static void call();
-
-static void emit_op_get_global(uint32_t iden_offset);
-static void emit_op_get_local(uint32_t stack_index);
-static void emit_op_get_upvalue(uint32_t upvalue_index);
-
-typedef void (*ParseFn)();  // pointer to a parsing function
-
-typedef struct ParseRule {
-  ParseFn prefix;   // function called if the current operation is prefix
-  ParseFn infix;    // function called if the current operation is infix
-  Precedence prec;  // precedence associated to the current infix operation
-} ParseRule;
-
-/* parse_rules: a mapping from operators to appropiate parsing rules */
-ParseRule parse_rules[] = {
-    [TK_TRUE] = {literal, NULL, PREC_PRIMARY},
-    [TK_FALSE] = {literal, NULL, PREC_PRIMARY},
-    [TK_NIL] = {literal, NULL, PREC_PRIMARY},
-    [TK_LEFT_PAREN] = {grouping, call, PREC_CALL},
-    [TK_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
-    [TK_LEFT_BRACE] = {NULL, NULL, PREC_NONE},
-    [TK_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
-    [TK_COMMA] = {NULL, NULL, PREC_NONE},
-    [TK_DOT] = {NULL, dot, PREC_CALL},
-    [TK_MINUS] = {unary, binary, PREC_TERM},
-    [TK_PLUS] = {NULL, binary, PREC_TERM},
-    [TK_SEMICOLON] = {NULL, NULL, PREC_NONE},
-    [TK_SLASH] = {NULL, binary, PREC_FACTOR},
-    [TK_STAR] = {NULL, binary, PREC_FACTOR},
-    [TK_BANG] = {unary, NULL, PREC_UNARY},
-    [TK_BANG_EQUAL] = {NULL, binary, PREC_EQUALITY},
-    [TK_EQUAL] = {NULL, assignment, PREC_ASSIGNMENT},
-    [TK_EQUAL_EQUAL] = {NULL, binary, PREC_EQUALITY},
-    [TK_GREATER] = {NULL, binary, PREC_COMPARISON},
-    [TK_GREATER_EQUAL] = {NULL, binary, PREC_COMPARISON},
-    [TK_LESS] = {NULL, binary, PREC_COMPARISON},
-    [TK_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
-    [TK_IDENTIFIER] = {variable, NULL, PREC_NONE},
-    [TK_STRING] = {string, NULL, PREC_PRIMARY},
-    [TK_NUMBER] = {number, NULL, PREC_PRIMARY},
-    [TK_AND] = {NULL, and_, PREC_AND},
-    [TK_CLASS] = {NULL, NULL, PREC_NONE},
-    [TK_ELSE] = {NULL, NULL, PREC_NONE},
-    [TK_FOR] = {NULL, NULL, PREC_NONE},
-    [TK_FUN] = {NULL, NULL, PREC_NONE},
-    [TK_IF] = {NULL, NULL, PREC_NONE},
-    [TK_OR] = {NULL, or_, PREC_OR},
-    [TK_PRINT] = {NULL, NULL, PREC_NONE},
-    [TK_RETURN] = {NULL, NULL, PREC_NONE},
-    [TK_SUPER] = {NULL, NULL, PREC_NONE},
-    [TK_THIS] = {NULL, NULL, PREC_NONE},
-    [TK_VAR] = {NULL, NULL, PREC_NONE},
-    [TK_WHILE] = {NULL, NULL, PREC_NONE},
-    [TK_ERROR] = {NULL, NULL, PREC_NONE},
-    [TK_EOF] = {NULL, NULL, PREC_NONE},
-};
-
 static ParseRule* get_rule(TokenType op) {
   return &(parse_rules[op]);
 }
@@ -525,9 +518,9 @@ static int resolve_upvalue(Compiler* compiler, Token* name) {
     return add_upvalue(compiler, enclosing_local, true);
   }
 
- int enclosing_upval = resolve_upvalue(compiler->enclosing, name);
- if (enclosing_upval != -1)
-   return add_upvalue(compiler, enclosing_upval, false);
+  int enclosing_upval = resolve_upvalue(compiler->enclosing, name);
+  if (enclosing_upval != -1)
+    return add_upvalue(compiler, enclosing_upval, false);
   return -1;
 }
 

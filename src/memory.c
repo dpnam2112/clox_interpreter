@@ -242,7 +242,7 @@ void mark_reachable_objects(Obj* obj) {
     case OBJ_BOUND_METHOD: {
       BoundMethodObj* bmethod = (BoundMethodObj*)obj;
       mark_value(bmethod->receiver);
-      mark_object((Obj*) bmethod->method);
+      mark_object((Obj*)bmethod->method);
       break;
     }
     default:

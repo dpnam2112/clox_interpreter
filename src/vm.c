@@ -133,7 +133,6 @@ static Value concatenate(Value left, Value right) {
   StringObj* concat_str_obj = StringObj_construct(concat_string, total_length);
   FREE(char, concat_string);
   return OBJ_VAL(*concat_str_obj);
-
 }
 
 /* runtime_error: print out error message to stderr and reset the stack */
@@ -188,7 +187,8 @@ static void panic(const char* format, ...) {
  * @param pc: pointer pointing to the program counter
  *
  * @param byte_count does not exceed 4. If it does, it will be changed to 4.
- * return value: positive integer value */
+ * return value: positive integer value
+ */
 static uint32_t read_bytes(uint8_t** pc, uint8_t byte_count) {
   if (byte_count > 4)
     byte_count = 4;
@@ -399,7 +399,8 @@ static InterpretResult run() {
         Value result;
 
         bool are_nums = right.type == VAL_NUMBER && left.type == VAL_NUMBER;
-        bool are_strs = OBJ_TYPE(right) == OBJ_STRING && OBJ_TYPE(left) == OBJ_STRING;
+        bool are_strs =
+            OBJ_TYPE(right) == OBJ_STRING && OBJ_TYPE(left) == OBJ_STRING;
 
         if (!(are_nums || are_strs)) {
           runtime_error("Both operands must be either strings or numbers");
@@ -621,7 +622,8 @@ static InterpretResult run() {
          * <offset>: Offset of the string representing the property's name
          * in the value array.
          * */
-        Value name = (inst == OP_GET_PROPERTY) ? READ_CONST() : READ_CONST_LONG();
+        Value name =
+            (inst == OP_GET_PROPERTY) ? READ_CONST() : READ_CONST_LONG();
         Value top = vm_stack_peek(0);
         if (!IS_INSTANCE_OBJ(top)) {
           runtime_error("Only instances have properties.");
@@ -635,12 +637,14 @@ static InterpretResult run() {
         if (table_get(&instance->fields, AS_STRING(name), &property)) {
           vm_stack_pop();  // Pop the class instance.
           vm_stack_push(property);
-        } else if (table_get(&instance->klass->methods, AS_STRING(name), &method)) {
+        } else if (table_get(&instance->klass->methods, AS_STRING(name),
+                             &method)) {
           if (!IS_CLOSURE_OBJ(method)) {
             panic("method must be a closure.");
           }
 
-          BoundMethodObj* bmethod = BoundMethodObj_construct(top, AS_CLOSURE(method));
+          BoundMethodObj* bmethod =
+              BoundMethodObj_construct(top, AS_CLOSURE(method));
           vm_stack_pop();
           vm_stack_push(OBJ_VAL(*bmethod));
         } else {
@@ -710,7 +714,8 @@ static InterpretResult run() {
         ClassObj* klass = AS_CLASS(vm_stack_peek(1));
         ClosureObj* method = AS_CLOSURE(vm_stack_peek(0));
 
-        bool exist = table_set(&klass->methods, method_name, OBJ_VAL(method->obj));
+        bool exist =
+            table_set(&klass->methods, method_name, OBJ_VAL(method->obj));
         if (exist) {
           // deleting the class from global variable table,
           // if it's defined globally
