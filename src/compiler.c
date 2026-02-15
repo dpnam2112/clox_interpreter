@@ -545,7 +545,6 @@ static void assignment() {
   uint32_t iden_offset = current_chunk()->constants.size - 1;
   Token name = parser.consumed_identifier;
 
-
   parse_precedence(PREC_ASSIGNMENT);
 
   int stack_index = resolve_local(current, &name);

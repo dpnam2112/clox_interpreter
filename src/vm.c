@@ -121,7 +121,7 @@ static bool is_falsey(Value val) {
 }
 
 static inline uint16_t read_short(CallFrame* frame) {
-  uint16_t v = *((uint16_t*) frame->pc);
+  uint16_t v = *((uint16_t*)frame->pc);
   frame->pc += 2;
   return v;
 }
@@ -239,7 +239,7 @@ static bool call_value(Value value, int param_count) {
 
   if (IS_CLOSURE_OBJ(value)) {
     ClosureObj* closure = AS_CLOSURE(value);
-    CallFrame *frame = vm_call_frame_push(closure, param_count);
+    CallFrame* frame = vm_call_frame_push(closure, param_count);
     if (frame == NULL) {
       return false;
     }
@@ -777,7 +777,8 @@ static InterpretResult run() {
         Value callable_val;
 
         // check if there is any property defined with the name
-        if (table_get(&AS_INSTANCE(v_instance)->fields, method_name, &callable_val)) {
+        if (table_get(&AS_INSTANCE(v_instance)->fields, method_name,
+                      &callable_val)) {
           if (!callable(callable_val)) {
             runtime_error("property is not callable.");
             return INTERPRET_RUNTIME_ERROR;
@@ -785,7 +786,8 @@ static InterpretResult run() {
         } else {
           // resolve method
           if (!table_get(&klass->methods, method_name, &callable_val)) {
-            runtime_error("Class '%s' doesn't have method/property '%s'.", klass->name->chars, AS_CSTRING(v_method_name));
+            runtime_error("Class '%s' doesn't have method/property '%s'.",
+                          klass->name->chars, AS_CSTRING(v_method_name));
             return INTERPRET_RUNTIME_ERROR;
           }
 
