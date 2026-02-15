@@ -60,6 +60,15 @@ int call_instruction(const char* name, Chunk* chunk, int offset) {
   return offset + 2;
 }
 
+int invoke_instruction(const char* name, Chunk* chunk, int offset) {
+  uint8_t const_offset = chunk->bytecodes[offset + 1];
+  uint8_t param_count = chunk->bytecodes[offset + 2];
+  printf("%-16s (%d args) %4d ", name, param_count, const_offset);
+  print_value(chunk->constants.values[const_offset]);
+  printf("\n");
+  return offset + 3;
+}
+
 int const_long_instruction(const char* name, Chunk* chunk, int offset) {
   // offset of the constant value in chunk->values
   uint32_t const_offset = 0;
@@ -167,8 +176,6 @@ int disassemble_inst(Chunk* chunk, size_t offset) {
       return simple_instruction("OP_LESS", offset);
     case OP_GREATER:
       return simple_instruction("OP_GREATER", offset);
-    case META_LINE_NUM:
-      return line_number(chunk, offset);
     case OP_PRINT:
       return simple_instruction("OP_PRINT", offset);
     case OP_POP:
@@ -244,6 +251,8 @@ int disassemble_inst(Chunk* chunk, size_t offset) {
       return const_long_instruction("OP_METHOD_LONG", chunk, offset);
     case OP_EXIT:
       return simple_instruction("OP_EXIT", offset);
+    case OP_INVOKE:
+      return invoke_instruction("OP_INVOKE", chunk, offset);
     default:
       printf("Unknown opcode\n");
       return offset + 1;

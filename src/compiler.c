@@ -527,7 +527,7 @@ static int resolve_upvalue(Compiler* compiler, Token* name) {
 static void call() {
   int param_count = parameter_list();
   if (param_count >= MAX_CALLARGS) {
-    error(&parser.prev, "Exceed limit of number of arguments.");
+    error(&parser.prev, "Exceed argument limit.");
   }
   emit_byte(OP_CALL);
   emit_byte(param_count);
@@ -1188,8 +1188,9 @@ static void binary() {
 
 /* dot: is invoked when the parser encounters a dot operator.
  * If an expression contains a dot operator, it could be either:
- * - A get-property expression. E.g: object.identifier + 1.
- * - A set-property expression. E.g: object.identifier = 1.
+ * - A get-property expression. E.g.: object.identifier + 1.
+ * - A set-property expression. E.g.: object.identifier = 1.
+ * - A method call. E.g.: object.method()
  */
 static void dot() {
   uint32_t iden_offset =
@@ -1202,6 +1203,14 @@ static void dot() {
     uint32_t iden_offset_size =
         (iden_offset <= UINT8_MAX) ? 1 : LONG_CONST_OFFSET_SIZE;
     emit_param_inst(inst, iden_offset, iden_offset_size);
+  } else if (match(TK_LEFT_PAREN)) {
+    int param_count = parameter_list();
+    if (param_count >= MAX_CALLARGS) {
+      error(&parser.prev, "Exceed argument limit.");
+    }
+    emit_byte(OP_INVOKE);
+    emit_byte(iden_offset);
+    emit_byte(param_count);
   } else {
     Opcode inst =
         (iden_offset <= UINT8_MAX) ? OP_GET_PROPERTY : OP_GET_PROPERTY_LONG;

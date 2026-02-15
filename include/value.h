@@ -66,7 +66,7 @@ bool value_equal(Value val_1, Value val_2);
 /* Limits */
 #define MAX_UPVALUE 256
 #define MAX_LOCALVAR 256
-#define MAX_CALLARGS 256
+#define MAX_CALLARGS UINT8_MAX
 
 typedef struct {
   Value* values;

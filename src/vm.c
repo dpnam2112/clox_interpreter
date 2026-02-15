@@ -239,7 +239,8 @@ static bool call_value(Value value, int param_count) {
 
   if (IS_CLOSURE_OBJ(value)) {
     ClosureObj* closure = AS_CLOSURE(value);
-    if (!vm_call_frame_push(closure, param_count)) {
+    CallFrame *frame = vm_call_frame_push(closure, param_count);
+    if (frame == NULL) {
       return false;
     }
   } else if (IS_CLASS_OBJ(value)) {
@@ -337,7 +338,6 @@ static void close_upvalues(Value* last) {
 
 static InterpretResult run() {
   // current frame being executed
-  CallFrame* frame = &vm.frames[vm.frame_count - 1];
 
 #define READ_BYTE() *(frame->pc++)
 #define READ_SHORT() (read_short(frame))
@@ -361,6 +361,7 @@ static InterpretResult run() {
   } while (false)
 
   for (;;) {
+    CallFrame* frame = &vm.frames[vm.frame_count - 1];
 #ifdef DBG_TRACE_EXECUTION
     /* Print stack values */
     printf("== begin value stack trace ==\n");
@@ -470,12 +471,6 @@ static InterpretResult run() {
       case OP_GREATER:
         BINARY_OP(BOOL_VAL, >);
         break;
-      case META_LINE_NUM:
-        // TODO(line number): remove META_LINE_NUM opcode
-        // a possible solution is a data structure like
-        // line-number table of cpython (lnotab)
-        READ_SHORT();
-        break;
       case OP_PRINT: {
         Value value = vm_stack_pop();
         print_value(value);
@@ -570,7 +565,6 @@ static InterpretResult run() {
           return INTERPRET_RUNTIME_ERROR;
         }
 
-        frame = &vm.frames[vm.frame_count - 1];
         break;
       }
       case OP_CLOSURE:
@@ -761,6 +755,49 @@ static InterpretResult run() {
         }
 
         vm_stack_pop();
+        break;
+      }
+      case OP_INVOKE: {
+        Value v_method_name = READ_CONST();
+        uint8_t param_count = READ_BYTE();
+
+        if (!(IS_STRING_OBJ(v_method_name))) {
+          panic("(OP_INVOKE) expect a string argument and a number argument.");
+        }
+
+        StringObj* method_name = AS_STRING(v_method_name);
+
+        Value v_instance = vm_stack_peek(param_count);
+        if (!IS_INSTANCE_OBJ(v_instance)) {
+          runtime_error("The receiver is not an instance.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        ClassObj* klass = AS_INSTANCE(v_instance)->klass;
+        Value callable_val;
+
+        // check if there is any property defined with the name
+        if (table_get(&AS_INSTANCE(v_instance)->fields, method_name, &callable_val)) {
+          if (!callable(callable_val)) {
+            runtime_error("property is not callable.");
+            return INTERPRET_RUNTIME_ERROR;
+          }
+        } else {
+          // resolve method
+          if (!table_get(&klass->methods, method_name, &callable_val)) {
+            runtime_error("Class '%s' doesn't have method/property '%s'.", klass->name->chars, AS_CSTRING(v_method_name));
+            return INTERPRET_RUNTIME_ERROR;
+          }
+
+          if (!IS_CLOSURE_OBJ(callable_val)) {
+            panic("'method' must be a closure.");
+          }
+        }
+
+        if (!call_value(callable_val, param_count)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
         break;
       }
     }
