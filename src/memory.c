@@ -171,6 +171,7 @@ void mark_vm_roots() {
   }
 
   mark_table(&vm.globals);
+  mark_object(&vm.cls_init_strlit->obj);
 
   for (CallFrame* frame = vm.frames; frame < &vm.frames[vm.frame_count];
        frame++) {

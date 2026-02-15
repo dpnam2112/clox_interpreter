@@ -80,6 +80,9 @@ void vm_init(bool repl) {
   vm.gc.allocated = 0;
   vm.gc.threshold = 2 << 8;
 
+  vm.cls_init_strlit = NULL;
+  vm.cls_init_strlit = StringObj_construct("init", 4);
+
   define_native_fn("clock", clock_native);
   define_native_fn("hasattr", native_fn_has_attribute);
 }
@@ -90,6 +93,7 @@ void vm_free() {
   free_objects();
   stack_reset();
   call_frame_reset();
+  vm.cls_init_strlit = NULL;
 }
 
 bool gc_empty() {
@@ -183,7 +187,7 @@ static void panic(const char* format, ...) {
 }
 
 static inline uint16_t read_short(CallFrame* frame) {
-  uint16_t val = *((uint16_t*) frame->pc);
+  uint16_t val = *((uint16_t*)frame->pc);
   frame->pc += sizeof(uint16_t);
   return val;
 }
@@ -205,10 +209,13 @@ static uint32_t read_bytes(uint8_t** pc, uint8_t byte_count) {
   return bytes;
 }
 
-static CallFrame* stack_call_frame(ClosureObj* closure, int param_count) {
+/** push_call_frame: push a new call frame on top of the call stack.
+ * Return the new call frame.
+ */
+static CallFrame* vm_call_frame_push(ClosureObj* closure, int param_count) {
   if (param_count != closure->function->arity) {
-    runtime_error("Expect %d parameters but got %d.",
-                  closure->function->arity, param_count);
+    runtime_error("Expect %d parameters but got %d.", closure->function->arity,
+                  param_count);
     return NULL;
   }
 
@@ -232,16 +239,25 @@ static bool call_value(Value value, int param_count) {
 
   if (IS_CLOSURE_OBJ(value)) {
     ClosureObj* closure = AS_CLOSURE(value);
-    if(!stack_call_frame(closure, param_count)) {
+    if (!vm_call_frame_push(closure, param_count)) {
       return false;
     }
-
-    // Check number of parameters
   } else if (IS_CLASS_OBJ(value)) {
     ClassObj* class_obj = AS_CLASS(value);
     InstanceObj* new_instance = InstanceObj_construct(class_obj);
-    vm.stack_top -= param_count;
-    vm.stack_top[-1] = OBJ_VAL(*new_instance);
+    Value v_init;
+
+    if (table_get(&class_obj->methods, vm.cls_init_strlit, &v_init)) {
+      if (!IS_CLOSURE_OBJ(v_init)) {
+        panic("initalizer is not a closure.");
+      }
+
+      ClosureObj* init = AS_CLOSURE(v_init);
+      CallFrame* frame = vm_call_frame_push(init, param_count);
+      frame->slots[0] = OBJ_VAL(*new_instance);
+    } else {
+      vm.stack_top[-1] = OBJ_VAL(*new_instance);
+    }
   } else if (IS_NATIVE_FN_OBJ(value)) {
     NativeFn native_fn = AS_NATIVE_FN(value);
     Value res;
@@ -255,7 +271,7 @@ static bool call_value(Value value, int param_count) {
   } else if (IS_BOUND_METHOD_OBJ(value)) {
     BoundMethodObj* bmethod = AS_BOUND_METHOD(value);
     ClosureObj* method = bmethod->method;
-    CallFrame* new_frame = stack_call_frame(method, param_count);
+    CallFrame* new_frame = vm_call_frame_push(method, param_count);
     if (!new_frame) {
       return false;
     }

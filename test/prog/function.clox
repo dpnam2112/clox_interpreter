@@ -88,3 +88,27 @@ print "== Test: Fibonacci inside scope ==";
     print scopedFib(21); // 10946
  }
 }
+
+print "== Test: implicit return ==";
+{
+  fun f() {
+
+  }
+
+  var check1 = (f() == nil);
+  fun g(a) {
+    if (a < 0) {
+      return;
+    } else {
+      return a;
+    }
+  }
+
+  var check2 = g(-1) == nil and g(-100) == nil and g(100) == 100;
+
+  if (check1 and check2) {
+    print "OK";
+  } else {
+    print "Failed";
+  }
+}

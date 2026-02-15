@@ -110,6 +110,10 @@ typedef struct {
     size_t allocated;
     size_t threshold;
   } gc;
+
+  // The method name of class initializers. In this case, it's
+  // literally equivalent to 'init'.
+  StringObj* cls_init_strlit;
 } VM;
 
 typedef enum {

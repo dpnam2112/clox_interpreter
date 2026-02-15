@@ -1,0 +1,9 @@
+'== Test: simple initializer =='
+'Harry'
+17
+'== Test: recursion inside initializer =='
+0
+1
+55
+610
+10946

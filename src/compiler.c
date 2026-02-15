@@ -48,6 +48,7 @@ typedef enum FunctionType {
   TYPE_FUNCTION,
   TYPE_SCRIPT,
   TYPE_METHOD,
+  TYPE_INITIALIZER,
 } FunctionType;
 
 /** Upvalue: used to resolve variables that lie outside
@@ -97,6 +98,7 @@ typedef struct ParseRule {
   Precedence prec;
 } ParseRule;
 
+// Function declarations
 static void dot();
 static void unary();
 static void binary();
@@ -127,6 +129,7 @@ static void this_();
 static void emit_op_get_global(uint32_t iden_offset);
 static void emit_op_get_local(uint32_t stack_index);
 static void emit_op_get_upvalue(uint32_t upvalue_index);
+static void emit_implicit_ret();
 static void end_scope();
 
 /* parse_rules: a mapping from operators to appropiate parsing rules */
@@ -279,7 +282,7 @@ static void compiler_init(Compiler* compiler, FunctionType type) {
   current = compiler;
 
   // reserve the first slot for VM's internal use
-  if (type == TYPE_METHOD) {
+  if (type == TYPE_METHOD || type == TYPE_INITIALIZER) {
     add_local((Token){TK_THIS, "this", 4, 0});
   } else {
     add_local((Token){TK_EOF, "", 0, 0});
@@ -426,16 +429,9 @@ static void consume(TokenType type, const char* msg) {
   error(&parser.current, msg);
 }
 
-static void emit_return(bool nil) {
-  if (nil) {
-    emit_byte(OP_NIL);
-  }
-
-  emit_byte(OP_RETURN);
-}
-
 static ClosureObj* end_compiler() {
-  emit_return(true);
+  emit_implicit_ret();
+
   FunctionObj* function = current->function;
   function->upval_count = current->upval_count;
 #ifdef DBG_DISASSEMBLE
@@ -774,7 +770,8 @@ static void function(FunctionType type) {
   for (int i = 0; i < compiler.upval_count; i++) {
     Upvalue upvalue = compiler.upvalues[i];
     emit_byte(upvalue.local | (upvalue.long_offset << 1));
-    emit_bytes(&(upvalue.index), (upvalue.long_offset) ? LONG_UPVAL_OFFSET_SIZE : 1);
+    emit_bytes(&(upvalue.index),
+               (upvalue.long_offset) ? LONG_UPVAL_OFFSET_SIZE : 1);
   }
 }
 
@@ -828,7 +825,14 @@ static void method() {
     error(&parser.current, "Expect 'fun' at the start of method declaration.");
   }
   uint32_t off = parse_identifier("Expect method name after 'fun'.");
-  function(TYPE_METHOD);
+  FunctionType ftype;
+  if (parser.prev.length == 4 && memcmp(parser.prev.start, "init", 4) == 0) {
+    ftype = TYPE_INITIALIZER;
+  } else {
+    ftype = TYPE_METHOD;
+  }
+
+  function(ftype);
   if (off <= UINT8_MAX) {
     emit_param_inst(OP_METHOD, off, 1);
   } else {
@@ -1052,12 +1056,18 @@ static void return_stmt() {
     error(&parser.prev, "'return' outside function.");
   }
 
-  bool nil = check(TK_SEMICOLON);
-  if (!nil) {
-    expression();
+  if (current->func_type == TYPE_INITIALIZER) {
+    error(&parser.prev, "Can't return a value from an initializer.");
   }
+
+  if (!check(TK_SEMICOLON)) {
+    expression();
+    emit_byte(OP_RETURN);
+  } else {
+    emit_implicit_ret();
+  }
+
   consume(TK_SEMICOLON, "Expect ';' after statement.");
-  emit_return(nil);
 }
 
 // parse statements that are not declaration type
@@ -1257,4 +1267,18 @@ static void emit_op_get_local(uint32_t stack_index) {
   else
     emit_param_inst(OP_GET_LOCAL_LONG, (uint32_t)stack_index,
                     LONG_LOCAL_OFFSET_SIZE);
+}
+
+// emit implicit return
+static void emit_implicit_ret() {
+  switch (current->func_type) {
+    case TYPE_INITIALIZER:
+      // slot 0 is reserved for the class instance
+      emit_op_get_local(0);
+      break;
+    default:
+      emit_byte(OP_NIL);
+      break;
+  }
+  emit_byte(OP_RETURN);
 }

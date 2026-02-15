@@ -28,3 +28,5 @@
 55
 610
 10946
+'== Test: implicit return =='
+'OK'
