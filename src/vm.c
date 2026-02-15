@@ -120,6 +120,12 @@ static bool is_falsey(Value val) {
   return IS_NIL(val) || (IS_BOOL(val) && !AS_BOOL(val));
 }
 
+static inline uint16_t read_short(CallFrame* frame) {
+  uint16_t v = *((uint16_t*) frame->pc);
+  frame->pc += 2;
+  return v;
+}
+
 /** Concatenate two strings that are on top of the stack.
  *  The result of the concatenation is pushed back into the stack.
  * */
@@ -184,12 +190,6 @@ static void panic(const char* format, ...) {
   va_end(args);
   fputs("\n", stderr);
   exit(-1);
-}
-
-static inline uint16_t read_short(CallFrame* frame) {
-  uint16_t val = *((uint16_t*)frame->pc);
-  frame->pc += sizeof(uint16_t);
-  return val;
 }
 
 /** read n bytes from a chunk

@@ -1,3 +1,8 @@
-<closure '_adder'>
-201
+'Test newAdder...'
+'OK'
+'Test newTripleAdder...'
+'OK'
+'Test returning closure inside nested scopes...'
+'OK'
+'Test multiple upvalues...'
 'OK'

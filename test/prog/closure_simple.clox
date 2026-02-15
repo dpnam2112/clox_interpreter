@@ -1,3 +1,4 @@
+print "Test newAdder...";
 fun newAdder(x) {
   fun _adder(y) {
     return x + y;
@@ -7,9 +8,12 @@ fun newAdder(x) {
 }
 
 var addOne = newAdder(1);
-print addOne;
-print addOne(200);
+if (addOne(200) == 201) {
+  print "OK";
+}
 
+
+print "Test newTripleAdder...";
 fun newTripleAdder(x, y) {
   {
     var y1 = y;
@@ -29,4 +33,80 @@ fun newTripleAdder(x, y) {
 var adder = newTripleAdder(101, 102);
 if (adder(103) == 101 + 102 + 103) {
   print "OK";
+} else {
+  print "Failed";
+}
+
+print "Test returning closure inside nested scopes...";
+fun chooseAdder(val) {
+  var x = 1;
+  var adder = nil;
+
+  {
+    var y = 2;
+    {
+      var z = 3;
+      {
+        var default = 4;
+        if (val == x) {
+          fun _adder(v) {
+            return v + x;
+          }
+          adder = _adder;
+        } else if (val == y) {
+          fun _adder(v) {
+            return v + y;
+          }
+          adder = _adder;
+        } else if (val == z) {
+          fun _adder(v) {
+            return v + z;
+          }
+          adder = _adder;
+        } else {
+          fun _adder(v) {
+            return v + default;
+          }
+          adder = _adder;
+        }
+      }
+    }
+  }
+  return adder;
+}
+
+var r1 = chooseAdder(1)(200); // 201
+var r2 = chooseAdder(2)(200); // 202
+var r3 = chooseAdder(3)(200); // 203
+var r4 = chooseAdder(4)(200); // 204
+var r5 = chooseAdder(5)(200); // 204
+
+if (r1 == 201 and r2 == 202 and r3 == 203 and r4 == 204 and r5 == 204) {
+  print "OK";
+} else {
+  print "Failed";
+}
+
+print "Test multiple upvalues...";
+fun foo(a, b, c) {
+  {
+    var x = a;
+    {
+      var z = b;
+      {
+        var y = c;
+        fun sum() {
+          return a + b + c + 2*x + 3*y + 4*z;
+        }
+
+        return sum;
+      }
+    }
+  }
+}
+
+if (foo(1, 2, 3)() == 25) {
+  print "OK";
+} else {
+  print "Failed";
 }
