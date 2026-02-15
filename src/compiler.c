@@ -28,8 +28,6 @@ typedef struct Parser {
   Token consumed_identifier;  // the previously consumed identifier.
   bool error;                 // was there any parse error occured?
   bool panic;                 // should the parser enter panic mode?
-  bool assign_property;  // should the parser emit OP_SET_PROPERTY? (Take a look
-                         // at dot() and assignment() for more information.)
   Precedence prev_prec;
 
   // These fields are used to store positions of each
@@ -293,7 +291,6 @@ void parser_init() {
   parser.error = false;
   parser.panic = false;
   parser.prev_prec = PREC_NONE;
-  parser.assign_property = false;
   parser.breaks = NULL;
   parser.continues = NULL;
 }
@@ -544,38 +541,29 @@ static void assignment() {
 
   // since the previous identifier is added recently, it lies on top
   // of the constant pool.
+  // in the case of instance property, this identifier is the property name.
   uint32_t iden_offset = current_chunk()->constants.size - 1;
-  Token name = parser.consumed_identifier;  // used to resolve variable's name
+  Token name = parser.consumed_identifier;
 
-  bool assign_property = parser.assign_property;
 
   parse_precedence(PREC_ASSIGNMENT);
 
-  if (!assign_property) {
-    int stack_index = resolve_local(current, &name);
-    int upvalue_index = 0;
+  int stack_index = resolve_local(current, &name);
+  int upvalue_index = 0;
 
-    if (stack_index != -1 && stack_index <= UINT8_MAX)
-      emit_param_inst(OP_SET_LOCAL, stack_index, 1);
-    else if (stack_index != -1)
-      emit_param_inst(OP_SET_LOCAL_LONG, stack_index, LONG_LOCAL_OFFSET_SIZE);
-    else if ((upvalue_index = resolve_upvalue(current, &name)) != -1 &&
-             upvalue_index <= UINT8_MAX)
-      emit_param_inst(OP_SET_UPVAL, upvalue_index, 1);
-    else if (upvalue_index != -1)
-      emit_param_inst(OP_SET_UPVAL_LONG, upvalue_index, LONG_UPVAL_OFFSET_SIZE);
-    else if (iden_offset <= UINT8_MAX)
-      emit_param_inst(OP_SET_GLOBAL, iden_offset, 1);
-    else
-      emit_param_inst(OP_SET_GLOBAL_LONG, iden_offset, LONG_CONST_OFFSET_SIZE);
-  } else {
-    parser.assign_property = false;
-    Opcode inst =
-        (iden_offset <= UINT8_MAX) ? OP_SET_PROPERTY : OP_SET_PROPERTY_LONG;
-    uint32_t iden_offset_size =
-        (iden_offset <= UINT8_MAX) ? 1 : LONG_CONST_OFFSET_SIZE;
-    emit_param_inst(inst, iden_offset, iden_offset_size);
-  }
+  if (stack_index != -1 && stack_index <= UINT8_MAX)
+    emit_param_inst(OP_SET_LOCAL, stack_index, 1);
+  else if (stack_index != -1)
+    emit_param_inst(OP_SET_LOCAL_LONG, stack_index, LONG_LOCAL_OFFSET_SIZE);
+  else if ((upvalue_index = resolve_upvalue(current, &name)) != -1 &&
+           upvalue_index <= UINT8_MAX)
+    emit_param_inst(OP_SET_UPVAL, upvalue_index, 1);
+  else if (upvalue_index != -1)
+    emit_param_inst(OP_SET_UPVAL_LONG, upvalue_index, LONG_UPVAL_OFFSET_SIZE);
+  else if (iden_offset <= UINT8_MAX)
+    emit_param_inst(OP_SET_GLOBAL, iden_offset, 1);
+  else
+    emit_param_inst(OP_SET_GLOBAL_LONG, iden_offset, LONG_CONST_OFFSET_SIZE);
 }
 
 static void variable() {
@@ -1198,33 +1186,29 @@ static void binary() {
   parser.prev_prec = op_prec;
 }
 
-/** dot: Invoke when the parser encounters a dot operator.
+/* dot: is invoked when the parser encounters a dot operator.
  * If an expression contains a dot operator, it could be either:
  * - A get-property expression. E.g: object.identifier + 1.
  * - A set-property expression. E.g: object.identifier = 1.
- *
- * After consuming the name of the attribute, the parser will check if the
- * current token is a TK_EQUAL. If it is, that means the current dot operator
- * is inside a set-property expression, so the function will stop at TK_EQUAL,
- * set parser.assign_property to true and let the job of emitting
- * OP_SET_PROPERTY for assignment() function. The assignment() will look at the
- * value of parser.assign_property to decide whether the OP_SET_PROPERTY should
- * be emitted.
- * */
+ */
 static void dot() {
   uint32_t iden_offset =
       parse_identifier("Expect an identifier after '.' operator.");
 
-  if (parser.current.type == TK_EQUAL) {
-    parser.assign_property = true;
-    return;
+  if (match(TK_EQUAL)) {
+    expression();
+    Opcode inst =
+        (iden_offset <= UINT8_MAX) ? OP_SET_PROPERTY : OP_SET_PROPERTY_LONG;
+    uint32_t iden_offset_size =
+        (iden_offset <= UINT8_MAX) ? 1 : LONG_CONST_OFFSET_SIZE;
+    emit_param_inst(inst, iden_offset, iden_offset_size);
+  } else {
+    Opcode inst =
+        (iden_offset <= UINT8_MAX) ? OP_GET_PROPERTY : OP_GET_PROPERTY_LONG;
+    uint32_t iden_offset_size =
+        (iden_offset <= UINT8_MAX) ? 1 : LONG_CONST_OFFSET_SIZE;
+    emit_param_inst(inst, iden_offset, iden_offset_size);
   }
-
-  Opcode inst =
-      (iden_offset <= UINT8_MAX) ? OP_GET_PROPERTY : OP_GET_PROPERTY_LONG;
-  uint32_t iden_offset_size =
-      (iden_offset <= UINT8_MAX) ? 1 : LONG_CONST_OFFSET_SIZE;
-  emit_param_inst(inst, iden_offset, iden_offset_size);
 }
 
 // compile: parse the source and emit bytecodes.

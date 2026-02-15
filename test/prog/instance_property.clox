@@ -1,0 +1,8 @@
+class Foo {
+
+}
+
+var foo = Foo();
+print (foo.x = 1); // 1
+print (foo.y = (foo.x == 2 or (foo.x = true))); // true
+print foo.z = foo.x and foo.y and (foo.x or foo.y) and false; // false
