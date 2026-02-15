@@ -1,0 +1,33 @@
+print "== Test: property assignment ==";
+class Foo {
+
+}
+
+var foo = Foo();
+print (foo.x = 1); // 1
+print (foo.y = (foo.x == 2 or (foo.x = true))); // true
+print foo.z = foo.x and foo.y and (foo.x or foo.y) and false; // false
+
+print "== Test: Callable property ==";
+fun fib(n) {
+  if (n < 2) {
+    return n;
+  }
+
+  return fib(n - 1) + fib(n - 2);
+}
+
+foo.fib = fib;
+print foo.fib(0); // 0
+print foo.fib(1); // 1
+print foo.fib(10); // 55
+print foo.fib(15); // 610
+print foo.fib(21); // 10946
+
+print "== Test: Re-assign a property ==";
+fun sayHello() {
+  print "Hello!";
+}
+
+foo.x = sayHello;
+foo.x();

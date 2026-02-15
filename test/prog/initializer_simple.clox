@@ -1,0 +1,32 @@
+print "== Test: simple initializer ==";
+class Student {
+  fun init(name, age) {
+    this.name = name;
+    this.age = age;
+  }
+}
+
+var harry = Student("Harry", 17);
+print harry.name;
+print harry.age;
+
+print "== Test: recursion inside initializer ==";
+class Fib {
+  fun init(x) {
+    fun fib(n) {
+      if (n < 2) {
+        return n;
+      }
+
+      return fib(n - 1) + fib(n - 2);
+    }
+
+    this.result = fib(x);
+  }
+}
+
+print Fib(0).result; // 0
+print Fib(1).result; // 1
+print Fib(10).result; // 55
+print Fib(15).result; // 610
+print Fib(21).result; // 10946

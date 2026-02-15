@@ -28,8 +28,6 @@ typedef struct Parser {
   Token consumed_identifier;  // the previously consumed identifier.
   bool error;                 // was there any parse error occured?
   bool panic;                 // should the parser enter panic mode?
-  bool assign_property;  // should the parser emit OP_SET_PROPERTY? (Take a look
-                         // at dot() and assignment() for more information.)
   Precedence prev_prec;
 
   // These fields are used to store positions of each
@@ -48,6 +46,7 @@ typedef enum FunctionType {
   TYPE_FUNCTION,
   TYPE_SCRIPT,
   TYPE_METHOD,
+  TYPE_INITIALIZER,
 } FunctionType;
 
 /** Upvalue: used to resolve variables that lie outside
@@ -67,34 +66,118 @@ typedef struct Upvalue {
   bool long_offset;
 } Upvalue;
 
-// This struct is used to compile function body.
-// After the function body is compiled, end_compiler()
-// is called to return a function object that represents
-// the compiled function.
-// Top-level script can be considered as a function, so
-// this struct is also used to compile top-level script.
+/** Compiler: stores states during the compilation process
+ * of a function or the global script, which also can be
+ * considered as a function. it mimicks the VM's behavior
+ * during runtime.
+ */
 typedef struct Compiler {
-  // @enclosing: refers to the compiler that compiles
-  // the function enclosing the current function
   struct Compiler* enclosing;
   FunctionObj* function;
   FunctionType func_type;
-
-  // This field (@locals) is used to resolve variables
-  // inside scopes.
   Local locals[MAX_LOCALVAR];
   int local_count;
   int scope_depth;
-
   Upvalue upvalues[MAX_UPVALUE];
   int upval_count;
 } Compiler;
 
+typedef struct ClassCompiler {
+  struct ClassCompiler* enclosing;
+} ClassCompiler;
+
+typedef void (*ParseFn)();
+typedef struct ParseRule {
+  // prefix: invoked if the current operation is prefix
+  ParseFn prefix;
+  // infix: invoked if the current operation is infix
+  ParseFn infix;
+  // prec: precedence associated to the current infix operation
+  Precedence prec;
+} ParseRule;
+
+// Function declarations
+static void dot();
+static void unary();
+static void binary();
+static void grouping();
+static void number();
+static void literal();
+static void string();
+static void variable();
+static void assignment();
+static void stmt();
+static void block_stmt();
+static void var_declaration();
+static void fun_declaration();
+static void class_declaration();
+static void method();
+static void if_stmt();
+static void while_stmt();
+static void for_stmt();
+static void break_stmt();
+static uint32_t parse_identifier(const char* error_msg);
+static void declare_variable(Token name);
+static void define_variable(uint32_t offset);
+static int parameter_list();
+static void and_();
+static void or_();
+static void call();
+static void this_();
+static void emit_op_get_global(uint32_t iden_offset);
+static void emit_op_get_local(uint32_t stack_index);
+static void emit_op_get_upvalue(uint32_t upvalue_index);
+static void emit_implicit_ret();
+static void end_scope();
+
+/* parse_rules: a mapping from operators to appropiate parsing rules */
+ParseRule parse_rules[] = {
+    [TK_TRUE] = {literal, NULL, PREC_PRIMARY},
+    [TK_FALSE] = {literal, NULL, PREC_PRIMARY},
+    [TK_NIL] = {literal, NULL, PREC_PRIMARY},
+    [TK_LEFT_PAREN] = {grouping, call, PREC_CALL},
+    [TK_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
+    [TK_LEFT_BRACE] = {NULL, NULL, PREC_NONE},
+    [TK_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
+    [TK_COMMA] = {NULL, NULL, PREC_NONE},
+    [TK_DOT] = {NULL, dot, PREC_CALL},
+    [TK_MINUS] = {unary, binary, PREC_TERM},
+    [TK_PLUS] = {NULL, binary, PREC_TERM},
+    [TK_SEMICOLON] = {NULL, NULL, PREC_NONE},
+    [TK_SLASH] = {NULL, binary, PREC_FACTOR},
+    [TK_STAR] = {NULL, binary, PREC_FACTOR},
+    [TK_BANG] = {unary, NULL, PREC_UNARY},
+    [TK_BANG_EQUAL] = {NULL, binary, PREC_EQUALITY},
+    [TK_EQUAL] = {NULL, assignment, PREC_ASSIGNMENT},
+    [TK_EQUAL_EQUAL] = {NULL, binary, PREC_EQUALITY},
+    [TK_GREATER] = {NULL, binary, PREC_COMPARISON},
+    [TK_GREATER_EQUAL] = {NULL, binary, PREC_COMPARISON},
+    [TK_LESS] = {NULL, binary, PREC_COMPARISON},
+    [TK_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
+    [TK_IDENTIFIER] = {variable, NULL, PREC_NONE},
+    [TK_STRING] = {string, NULL, PREC_PRIMARY},
+    [TK_NUMBER] = {number, NULL, PREC_PRIMARY},
+    [TK_AND] = {NULL, and_, PREC_AND},
+    [TK_CLASS] = {NULL, NULL, PREC_NONE},
+    [TK_ELSE] = {NULL, NULL, PREC_NONE},
+    [TK_FOR] = {NULL, NULL, PREC_NONE},
+    [TK_FUN] = {NULL, NULL, PREC_NONE},
+    [TK_IF] = {NULL, NULL, PREC_NONE},
+    [TK_OR] = {NULL, or_, PREC_OR},
+    [TK_PRINT] = {NULL, NULL, PREC_NONE},
+    [TK_RETURN] = {NULL, NULL, PREC_NONE},
+    [TK_SUPER] = {NULL, NULL, PREC_NONE},
+    [TK_THIS] = {this_, NULL, PREC_NONE},
+    [TK_VAR] = {NULL, NULL, PREC_NONE},
+    [TK_WHILE] = {NULL, NULL, PREC_NONE},
+    [TK_ERROR] = {NULL, NULL, PREC_NONE},
+    [TK_EOF] = {NULL, NULL, PREC_NONE},
+};
+
 Parser parser;
 Chunk* compiling_chunk;
 Compiler* current = NULL;
-
-static void end_scope();
+ClassCompiler* cur_cls = NULL;
 
 bool mark_compiler_roots() {
   Compiler* compiler_it = current;
@@ -183,31 +266,31 @@ static int add_upvalue(Compiler* compiler, int index, bool local) {
   return compiler->upval_count++;
 }
 
-/** compiler_init: initialize a new compiler used to
- * compile function body.
- */
 static void compiler_init(Compiler* compiler, FunctionType type) {
   compiler->function = FunctionObj_construct();
   compiler->func_type = type;
   compiler->enclosing = current;
-  compiler->scope_depth = compiler->local_count = 0;
+  compiler->scope_depth = 0;
+  compiler->local_count = 0;
   if (type != TYPE_SCRIPT) {
     compiler->function->name = StringObj_construct(
         parser.consumed_identifier.start, parser.consumed_identifier.length);
   }
   compiler->upval_count = 0;
-
   current = compiler;
 
-  // dummy local
-  add_local((Token){TK_EOF, "", 0, 0});
+  // reserve the first slot for VM's internal use
+  if (type == TYPE_METHOD || type == TYPE_INITIALIZER) {
+    add_local((Token){TK_THIS, "this", 4, 0});
+  } else {
+    add_local((Token){TK_EOF, "", 0, 0});
+  }
 }
 
 void parser_init() {
   parser.error = false;
   parser.panic = false;
   parser.prev_prec = PREC_NONE;
-  parser.assign_property = false;
   parser.breaks = NULL;
   parser.continues = NULL;
 }
@@ -333,7 +416,7 @@ static bool match(TokenType type) {
  *
  * throw an error to stderr if the next token does not
  * belong to @type
- * */
+ */
 static void consume(TokenType type, const char* msg) {
   if (parser.current.type == type) {
     advance();
@@ -343,16 +426,9 @@ static void consume(TokenType type, const char* msg) {
   error(&parser.current, msg);
 }
 
-static void emit_return(bool nil) {
-  if (nil) {
-    emit_byte(OP_NIL);
-  }
-
-  emit_byte(OP_RETURN);
-}
-
 static ClosureObj* end_compiler() {
-  emit_return(true);
+  emit_implicit_ret();
+
   FunctionObj* function = current->function;
   function->upval_count = current->upval_count;
 #ifdef DBG_DISASSEMBLE
@@ -370,89 +446,6 @@ static ClosureObj* end_compiler() {
   return closure;
 }
 
-static void dot();
-static void unary();
-static void binary();
-static void grouping();
-static void number();
-static void literal();
-static void string();
-static void variable();
-static void assignment();
-static void stmt();
-static void block_stmt();
-static void var_declaration();
-static void fun_declaration();
-static void class_declaration();
-static void method();
-static void if_stmt();
-static void while_stmt();
-static void for_stmt();
-static void break_stmt();
-static uint32_t parse_identifier(const char* error_msg);
-static void declare_variable(Token name);
-static void define_variable(uint32_t offset);
-static int parameter_list();
-static void and_();
-static void or_();
-static void call();
-
-static void emit_op_get_global(uint32_t iden_offset);
-static void emit_op_get_local(uint32_t stack_index);
-static void emit_op_get_upvalue(uint32_t upvalue_index);
-
-typedef void (*ParseFn)();  // pointer to a parsing function
-
-typedef struct ParseRule {
-  ParseFn prefix;   // function called if the current operation is prefix
-  ParseFn infix;    // function called if the current operation is infix
-  Precedence prec;  // precedence associated to the current infix operation
-} ParseRule;
-
-/* parse_rules: a mapping from operators to appropiate parsing rules */
-ParseRule parse_rules[] = {
-    [TK_TRUE] = {literal, NULL, PREC_PRIMARY},
-    [TK_FALSE] = {literal, NULL, PREC_PRIMARY},
-    [TK_NIL] = {literal, NULL, PREC_PRIMARY},
-    [TK_LEFT_PAREN] = {grouping, call, PREC_CALL},
-    [TK_RIGHT_PAREN] = {NULL, NULL, PREC_NONE},
-    [TK_LEFT_BRACE] = {NULL, NULL, PREC_NONE},
-    [TK_RIGHT_BRACE] = {NULL, NULL, PREC_NONE},
-    [TK_COMMA] = {NULL, NULL, PREC_NONE},
-    [TK_DOT] = {NULL, dot, PREC_CALL},
-    [TK_MINUS] = {unary, binary, PREC_TERM},
-    [TK_PLUS] = {NULL, binary, PREC_TERM},
-    [TK_SEMICOLON] = {NULL, NULL, PREC_NONE},
-    [TK_SLASH] = {NULL, binary, PREC_FACTOR},
-    [TK_STAR] = {NULL, binary, PREC_FACTOR},
-    [TK_BANG] = {unary, NULL, PREC_UNARY},
-    [TK_BANG_EQUAL] = {NULL, binary, PREC_EQUALITY},
-    [TK_EQUAL] = {NULL, assignment, PREC_ASSIGNMENT},
-    [TK_EQUAL_EQUAL] = {NULL, binary, PREC_EQUALITY},
-    [TK_GREATER] = {NULL, binary, PREC_COMPARISON},
-    [TK_GREATER_EQUAL] = {NULL, binary, PREC_COMPARISON},
-    [TK_LESS] = {NULL, binary, PREC_COMPARISON},
-    [TK_LESS_EQUAL] = {NULL, binary, PREC_COMPARISON},
-    [TK_IDENTIFIER] = {variable, NULL, PREC_NONE},
-    [TK_STRING] = {string, NULL, PREC_PRIMARY},
-    [TK_NUMBER] = {number, NULL, PREC_PRIMARY},
-    [TK_AND] = {NULL, and_, PREC_AND},
-    [TK_CLASS] = {NULL, NULL, PREC_NONE},
-    [TK_ELSE] = {NULL, NULL, PREC_NONE},
-    [TK_FOR] = {NULL, NULL, PREC_NONE},
-    [TK_FUN] = {NULL, NULL, PREC_NONE},
-    [TK_IF] = {NULL, NULL, PREC_NONE},
-    [TK_OR] = {NULL, or_, PREC_OR},
-    [TK_PRINT] = {NULL, NULL, PREC_NONE},
-    [TK_RETURN] = {NULL, NULL, PREC_NONE},
-    [TK_SUPER] = {NULL, NULL, PREC_NONE},
-    [TK_THIS] = {NULL, NULL, PREC_NONE},
-    [TK_VAR] = {NULL, NULL, PREC_NONE},
-    [TK_WHILE] = {NULL, NULL, PREC_NONE},
-    [TK_ERROR] = {NULL, NULL, PREC_NONE},
-    [TK_EOF] = {NULL, NULL, PREC_NONE},
-};
-
 static ParseRule* get_rule(TokenType op) {
   return &(parse_rules[op]);
 }
@@ -465,7 +458,7 @@ static bool identifier_equal(Token* tk_1, Token* tk_2) {
 /* parse_precedence: parse the expression whose precedence is
  * not lower than @prec
  * @prec: precedence's lower bound
- * */
+ */
 static void parse_precedence(Precedence prec) {
   // a valid expression always start with a prefix expression
   // or a literal. E.g: -1, a + 1, b.a, .etc
@@ -525,16 +518,16 @@ static int resolve_upvalue(Compiler* compiler, Token* name) {
     return add_upvalue(compiler, enclosing_local, true);
   }
 
- int enclosing_upval = resolve_upvalue(compiler->enclosing, name);
- if (enclosing_upval != -1)
-   return add_upvalue(compiler, enclosing_upval, false);
+  int enclosing_upval = resolve_upvalue(compiler->enclosing, name);
+  if (enclosing_upval != -1)
+    return add_upvalue(compiler, enclosing_upval, false);
   return -1;
 }
 
 static void call() {
   int param_count = parameter_list();
   if (param_count >= MAX_CALLARGS) {
-    error(&parser.prev, "Exceed limit of number of arguments.");
+    error(&parser.prev, "Exceed argument limit.");
   }
   emit_byte(OP_CALL);
   emit_byte(param_count);
@@ -548,38 +541,29 @@ static void assignment() {
 
   // since the previous identifier is added recently, it lies on top
   // of the constant pool.
+  // in the case of instance property, this identifier is the property name.
   uint32_t iden_offset = current_chunk()->constants.size - 1;
-  Token name = parser.consumed_identifier;  // used to resolve variable's name
+  Token name = parser.consumed_identifier;
 
-  bool assign_property = parser.assign_property;
 
   parse_precedence(PREC_ASSIGNMENT);
 
-  if (!assign_property) {
-    int stack_index = resolve_local(current, &name);
-    int upvalue_index = 0;
+  int stack_index = resolve_local(current, &name);
+  int upvalue_index = 0;
 
-    if (stack_index != -1 && stack_index <= UINT8_MAX)
-      emit_param_inst(OP_SET_LOCAL, stack_index, 1);
-    else if (stack_index != -1)
-      emit_param_inst(OP_SET_LOCAL_LONG, stack_index, LONG_LOCAL_OFFSET_SIZE);
-    else if ((upvalue_index = resolve_upvalue(current, &name)) != -1 &&
-             upvalue_index <= UINT8_MAX)
-      emit_param_inst(OP_SET_UPVAL, upvalue_index, 1);
-    else if (upvalue_index != -1)
-      emit_param_inst(OP_SET_UPVAL_LONG, upvalue_index, LONG_UPVAL_OFFSET_SIZE);
-    else if (iden_offset <= UINT8_MAX)
-      emit_param_inst(OP_SET_GLOBAL, iden_offset, 1);
-    else
-      emit_param_inst(OP_SET_GLOBAL_LONG, iden_offset, LONG_CONST_OFFSET_SIZE);
-  } else {
-    parser.assign_property = false;
-    Opcode inst =
-        (iden_offset <= UINT8_MAX) ? OP_SET_PROPERTY : OP_SET_PROPERTY_LONG;
-    uint32_t iden_offset_size =
-        (iden_offset <= UINT8_MAX) ? 1 : LONG_CONST_OFFSET_SIZE;
-    emit_param_inst(inst, iden_offset, iden_offset_size);
-  }
+  if (stack_index != -1 && stack_index <= UINT8_MAX)
+    emit_param_inst(OP_SET_LOCAL, stack_index, 1);
+  else if (stack_index != -1)
+    emit_param_inst(OP_SET_LOCAL_LONG, stack_index, LONG_LOCAL_OFFSET_SIZE);
+  else if ((upvalue_index = resolve_upvalue(current, &name)) != -1 &&
+           upvalue_index <= UINT8_MAX)
+    emit_param_inst(OP_SET_UPVAL, upvalue_index, 1);
+  else if (upvalue_index != -1)
+    emit_param_inst(OP_SET_UPVAL_LONG, upvalue_index, LONG_UPVAL_OFFSET_SIZE);
+  else if (iden_offset <= UINT8_MAX)
+    emit_param_inst(OP_SET_GLOBAL, iden_offset, 1);
+  else
+    emit_param_inst(OP_SET_GLOBAL_LONG, iden_offset, LONG_CONST_OFFSET_SIZE);
 }
 
 static void variable() {
@@ -642,19 +626,23 @@ static void if_stmt() {
   // then block
   emit_byte(OP_POP);
   stmt();
+  uint32_t then_to_exit = emit_jump(OP_JMP);
+
   if (match(TK_ELSE)) {
     // this jump skip the else block when then block
     // finishes.
-    uint32_t to_exit = emit_jump(OP_JMP);
+    uint32_t else_to_exit = emit_jump(OP_JMP);
     // patch to-else jump
     patch_jump(to_else);
     emit_byte(OP_POP);
     stmt();
-
     // patch the exit jump
-    patch_jump(to_exit);
+    patch_jump(else_to_exit);
+    patch_jump(then_to_exit);
   } else {
     patch_jump(to_else);
+    emit_byte(OP_POP);
+    patch_jump(then_to_exit);
   }
 }
 
@@ -672,6 +660,15 @@ static void or_() {
   emit_byte(OP_POP);
   parse_precedence(PREC_OR);
   patch_jump(jmp_out);
+}
+
+static void this_() {
+  if (cur_cls == NULL) {
+    error(&parser.prev, "Can't use 'this' outside of a class.");
+    return;
+  }
+
+  variable();
 }
 
 /* var_declaration(): parse the var declaration statement
@@ -750,11 +747,12 @@ static void function(FunctionType type) {
   begin_scope();
 
   consume(TK_LEFT_PAREN, "Expect '(' after function name.");
-  uint8_t param_count = 0;
+  int param_count = 0;
   if (!check(TK_RIGHT_PAREN)) {
     do {
-      if (param_count == UINT8_MAX)
+      if (param_count >= MAX_CALLARGS) {
         error(&parser.prev, "Exceed limit of number of parameters.");
+      }
       uint32_t name = parse_identifier("Expect parameter's name.");
       declare_variable(parser.consumed_identifier);
       define_variable(name);
@@ -772,11 +770,9 @@ static void function(FunctionType type) {
 
   for (int i = 0; i < compiler.upval_count; i++) {
     Upvalue upvalue = compiler.upvalues[i];
-    // this bytecode param hint the VM how it should read the upvalue offset.
     emit_byte(upvalue.local | (upvalue.long_offset << 1));
-
-    // TODO: replace '2' with an enum.
-    emit_bytes(&(upvalue.index), (upvalue.long_offset) ? 2 : 1);
+    emit_bytes(&(upvalue.index),
+               (upvalue.long_offset) ? LONG_UPVAL_OFFSET_SIZE : 1);
   }
 }
 
@@ -794,6 +790,10 @@ static void class_declaration() {
   } else {
     emit_param_inst(OP_CLASS_LONG, name_offset, LONG_CONST_OFFSET_SIZE);
   }
+
+  ClassCompiler cls_cmpl;
+  cls_cmpl.enclosing = cur_cls;
+  cur_cls = &cls_cmpl;
 
   // initially I thought I could ignore this define_variable() call.
   // but it's necessary to implement inheritance in the next chapter.
@@ -826,7 +826,14 @@ static void method() {
     error(&parser.current, "Expect 'fun' at the start of method declaration.");
   }
   uint32_t off = parse_identifier("Expect method name after 'fun'.");
-  function(TYPE_METHOD);
+  FunctionType ftype;
+  if (parser.prev.length == 4 && memcmp(parser.prev.start, "init", 4) == 0) {
+    ftype = TYPE_INITIALIZER;
+  } else {
+    ftype = TYPE_METHOD;
+  }
+
+  function(ftype);
   if (off <= UINT8_MAX) {
     emit_param_inst(OP_METHOD, off, 1);
   } else {
@@ -1050,12 +1057,18 @@ static void return_stmt() {
     error(&parser.prev, "'return' outside function.");
   }
 
-  bool nil = check(TK_SEMICOLON);
-  if (!nil) {
-    expression();
+  if (current->func_type == TYPE_INITIALIZER) {
+    error(&parser.prev, "Can't return a value from an initializer.");
   }
+
+  if (!check(TK_SEMICOLON)) {
+    expression();
+    emit_byte(OP_RETURN);
+  } else {
+    emit_implicit_ret();
+  }
+
   consume(TK_SEMICOLON, "Expect ';' after statement.");
-  emit_return(nil);
 }
 
 // parse statements that are not declaration type
@@ -1186,33 +1199,38 @@ static void binary() {
   parser.prev_prec = op_prec;
 }
 
-/** dot: Invoke when the parser encounters a dot operator.
+/* dot: is invoked when the parser encounters a dot operator.
  * If an expression contains a dot operator, it could be either:
- * - A get-property expression. E.g: object.identifier + 1.
- * - A set-property expression. E.g: object.identifier = 1.
- *
- * After consuming the name of the attribute, the parser will check if the
- * current token is a TK_EQUAL. If it is, that means the current dot operator
- * is inside a set-property expression, so the function will stop at TK_EQUAL,
- * set parser.assign_property to true and let the job of emitting
- * OP_SET_PROPERTY for assignment() function. The assignment() will look at the
- * value of parser.assign_property to decide whether the OP_SET_PROPERTY should
- * be emitted.
- * */
+ * - A get-property expression. E.g.: object.identifier + 1.
+ * - A set-property expression. E.g.: object.identifier = 1.
+ * - A method call. E.g.: object.method()
+ */
 static void dot() {
   uint32_t iden_offset =
       parse_identifier("Expect an identifier after '.' operator.");
 
-  if (parser.current.type == TK_EQUAL) {
-    parser.assign_property = true;
-    return;
+  if (match(TK_EQUAL)) {
+    expression();
+    Opcode inst =
+        (iden_offset <= UINT8_MAX) ? OP_SET_PROPERTY : OP_SET_PROPERTY_LONG;
+    uint32_t iden_offset_size =
+        (iden_offset <= UINT8_MAX) ? 1 : LONG_CONST_OFFSET_SIZE;
+    emit_param_inst(inst, iden_offset, iden_offset_size);
+  } else if (match(TK_LEFT_PAREN)) {
+    int param_count = parameter_list();
+    if (param_count >= MAX_CALLARGS) {
+      error(&parser.prev, "Exceed argument limit.");
+    }
+    emit_byte(OP_INVOKE);
+    emit_byte(iden_offset);
+    emit_byte(param_count);
+  } else {
+    Opcode inst =
+        (iden_offset <= UINT8_MAX) ? OP_GET_PROPERTY : OP_GET_PROPERTY_LONG;
+    uint32_t iden_offset_size =
+        (iden_offset <= UINT8_MAX) ? 1 : LONG_CONST_OFFSET_SIZE;
+    emit_param_inst(inst, iden_offset, iden_offset_size);
   }
-
-  Opcode inst =
-      (iden_offset <= UINT8_MAX) ? OP_GET_PROPERTY : OP_GET_PROPERTY_LONG;
-  uint32_t iden_offset_size =
-      (iden_offset <= UINT8_MAX) ? 1 : LONG_CONST_OFFSET_SIZE;
-  emit_param_inst(inst, iden_offset, iden_offset_size);
 }
 
 // compile: parse the source and emit bytecodes.
@@ -1255,4 +1273,18 @@ static void emit_op_get_local(uint32_t stack_index) {
   else
     emit_param_inst(OP_GET_LOCAL_LONG, (uint32_t)stack_index,
                     LONG_LOCAL_OFFSET_SIZE);
+}
+
+// emit implicit return
+static void emit_implicit_ret() {
+  switch (current->func_type) {
+    case TYPE_INITIALIZER:
+      // slot 0 is reserved for the class instance
+      emit_op_get_local(0);
+      break;
+    default:
+      emit_byte(OP_NIL);
+      break;
+  }
+  emit_byte(OP_RETURN);
 }

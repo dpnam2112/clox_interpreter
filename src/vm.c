@@ -80,6 +80,9 @@ void vm_init(bool repl) {
   vm.gc.allocated = 0;
   vm.gc.threshold = 2 << 8;
 
+  vm.cls_init_strlit = NULL;
+  vm.cls_init_strlit = StringObj_construct("init", 4);
+
   define_native_fn("clock", clock_native);
   define_native_fn("hasattr", native_fn_has_attribute);
 }
@@ -90,6 +93,7 @@ void vm_free() {
   free_objects();
   stack_reset();
   call_frame_reset();
+  vm.cls_init_strlit = NULL;
 }
 
 bool gc_empty() {
@@ -139,7 +143,6 @@ static Value concatenate(Value left, Value right) {
   StringObj* concat_str_obj = StringObj_construct(concat_string, total_length);
   FREE(char, concat_string);
   return OBJ_VAL(*concat_str_obj);
-
 }
 
 /* runtime_error: print out error message to stderr and reset the stack */
@@ -194,14 +197,33 @@ static void panic(const char* format, ...) {
  * @param pc: pointer pointing to the program counter
  *
  * @param byte_count does not exceed 4. If it does, it will be changed to 4.
- * return value: positive integer value */
+ * return value: positive integer value
+ */
 static uint32_t read_bytes(uint8_t** pc, uint8_t byte_count) {
+  // TODO: declare its prototype as read_short's
   if (byte_count > 4)
     byte_count = 4;
   uint32_t bytes = 0;
   memcpy(&bytes, *pc, byte_count);
   *pc += byte_count;
   return bytes;
+}
+
+/** push_call_frame: push a new call frame on top of the call stack.
+ * Return the new call frame.
+ */
+static CallFrame* vm_call_frame_push(ClosureObj* closure, int param_count) {
+  if (param_count != closure->function->arity) {
+    runtime_error("Expect %d parameters but got %d.", closure->function->arity,
+                  param_count);
+    return NULL;
+  }
+
+  CallFrame* new_frame = &vm.frames[vm.frame_count++];
+  new_frame->closure = closure;
+  new_frame->pc = closure->function->chunk.bytecodes;
+  new_frame->slots = vm.stack_top - param_count - 1;
+  return new_frame;
 }
 
 static bool call_value(Value value, int param_count) {
@@ -217,22 +239,26 @@ static bool call_value(Value value, int param_count) {
 
   if (IS_CLOSURE_OBJ(value)) {
     ClosureObj* closure = AS_CLOSURE(value);
-    // Check number of parameters
-    if (param_count != closure->function->arity) {
-      runtime_error("Expect %d parameters but got %d.",
-                    closure->function->arity, param_count);
+    CallFrame *frame = vm_call_frame_push(closure, param_count);
+    if (frame == NULL) {
       return false;
     }
-
-    CallFrame* new_frame = &vm.frames[vm.frame_count++];
-    new_frame->closure = closure;
-    new_frame->pc = closure->function->chunk.bytecodes;
-    new_frame->slots = vm.stack_top - param_count- 1;
   } else if (IS_CLASS_OBJ(value)) {
     ClassObj* class_obj = AS_CLASS(value);
     InstanceObj* new_instance = InstanceObj_construct(class_obj);
-    vm.stack_top -= param_count;
-    vm.stack_top[-1] = OBJ_VAL(*new_instance);
+    Value v_init;
+
+    if (table_get(&class_obj->methods, vm.cls_init_strlit, &v_init)) {
+      if (!IS_CLOSURE_OBJ(v_init)) {
+        panic("initalizer is not a closure.");
+      }
+
+      ClosureObj* init = AS_CLOSURE(v_init);
+      CallFrame* frame = vm_call_frame_push(init, param_count);
+      frame->slots[0] = OBJ_VAL(*new_instance);
+    } else {
+      vm.stack_top[-1] = OBJ_VAL(*new_instance);
+    }
   } else if (IS_NATIVE_FN_OBJ(value)) {
     NativeFn native_fn = AS_NATIVE_FN(value);
     Value res;
@@ -246,12 +272,12 @@ static bool call_value(Value value, int param_count) {
   } else if (IS_BOUND_METHOD_OBJ(value)) {
     BoundMethodObj* bmethod = AS_BOUND_METHOD(value);
     ClosureObj* method = bmethod->method;
+    CallFrame* new_frame = vm_call_frame_push(method, param_count);
+    if (!new_frame) {
+      return false;
+    }
 
-    // TODO: Handle 'this'
-    CallFrame* new_frame = &vm.frames[vm.frame_count++];
-    new_frame->closure = method;
-    new_frame->pc = method->function->chunk.bytecodes;
-    new_frame->slots = vm.stack_top - param_count - 1;
+    new_frame->slots[0] = bmethod->receiver;
   }
 
   return true;
@@ -312,7 +338,6 @@ static void close_upvalues(Value* last) {
 
 static InterpretResult run() {
   // current frame being executed
-  CallFrame* frame = &vm.frames[vm.frame_count - 1];
 
 #define READ_BYTE() *(frame->pc++)
 #define READ_SHORT() (read_short(frame))
@@ -336,6 +361,7 @@ static InterpretResult run() {
   } while (false)
 
   for (;;) {
+    CallFrame* frame = &vm.frames[vm.frame_count - 1];
 #ifdef DBG_TRACE_EXECUTION
     /* Print stack values */
     printf("== begin value stack trace ==\n");
@@ -358,11 +384,11 @@ static InterpretResult run() {
           return INTERPRET_OK;
         }
 
+        close_upvalues(frame->slots);
         vm.stack_top = frame->slots;
         vm.frame_count--;
         frame = &vm.frames[vm.frame_count - 1];
         vm_stack_push(return_value);
-        close_upvalues(vm.stack_top);
         break;
       }
       case OP_CONST:
@@ -405,7 +431,8 @@ static InterpretResult run() {
         Value result;
 
         bool are_nums = right.type == VAL_NUMBER && left.type == VAL_NUMBER;
-        bool are_strs = OBJ_TYPE(right) == OBJ_STRING && OBJ_TYPE(left) == OBJ_STRING;
+        bool are_strs =
+            OBJ_TYPE(right) == OBJ_STRING && OBJ_TYPE(left) == OBJ_STRING;
 
         if (!(are_nums || are_strs)) {
           runtime_error("Both operands must be either strings or numbers");
@@ -443,12 +470,6 @@ static InterpretResult run() {
         break;
       case OP_GREATER:
         BINARY_OP(BOOL_VAL, >);
-        break;
-      case META_LINE_NUM:
-        // TODO(line number): remove META_LINE_NUM opcode
-        // a possible solution is a data structure like
-        // line-number table of cpython (lnotab)
-        READ_SHORT();
         break;
       case OP_PRINT: {
         Value value = vm_stack_pop();
@@ -544,7 +565,6 @@ static InterpretResult run() {
           return INTERPRET_RUNTIME_ERROR;
         }
 
-        frame = &vm.frames[vm.frame_count - 1];
         break;
       }
       case OP_CLOSURE:
@@ -561,10 +581,8 @@ static InterpretResult run() {
         for (int i = 0; i < closure->function->upval_count; i++) {
           uint8_t upval_info = READ_BYTE();
 
-          // TODO(closure): this is unecessary. one bit flag is enough.
-          bool local = upval_info & 1;  // Extract the first bit (LSB)
-          bool long_offset =
-              (upval_info & (1 << 1)) >> 1;  // Extract the second bit
+          bool local = upval_info & 1;
+          bool long_offset = (upval_info & (1 << 1)) >> 1;
 
           uint32_t upvalue_pos = (long_offset) ? READ_BYTES(2) : READ_BYTE();
 
@@ -627,7 +645,8 @@ static InterpretResult run() {
          * <offset>: Offset of the string representing the property's name
          * in the value array.
          * */
-        Value name = (inst == OP_GET_PROPERTY) ? READ_CONST() : READ_CONST_LONG();
+        Value name =
+            (inst == OP_GET_PROPERTY) ? READ_CONST() : READ_CONST_LONG();
         Value top = vm_stack_peek(0);
         if (!IS_INSTANCE_OBJ(top)) {
           runtime_error("Only instances have properties.");
@@ -641,12 +660,14 @@ static InterpretResult run() {
         if (table_get(&instance->fields, AS_STRING(name), &property)) {
           vm_stack_pop();  // Pop the class instance.
           vm_stack_push(property);
-        } else if (table_get(&instance->klass->methods, AS_STRING(name), &method)) {
+        } else if (table_get(&instance->klass->methods, AS_STRING(name),
+                             &method)) {
           if (!IS_CLOSURE_OBJ(method)) {
             panic("method must be a closure.");
           }
 
-          BoundMethodObj* bmethod = BoundMethodObj_construct(top, AS_CLOSURE(method));
+          BoundMethodObj* bmethod =
+              BoundMethodObj_construct(top, AS_CLOSURE(method));
           vm_stack_pop();
           vm_stack_push(OBJ_VAL(*bmethod));
         } else {
@@ -678,6 +699,12 @@ static InterpretResult run() {
          * */
         Value property_name_val =
             (inst == OP_SET_PROPERTY) ? READ_CONST() : READ_CONST_LONG();
+
+        if (!IS_INSTANCE_OBJ(vm_stack_peek(1))) {
+          runtime_error("Only instances have properties.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
         Value rhs_value = vm_stack_peek(0);
         InstanceObj* instance = AS_INSTANCE(vm_stack_peek(1));
         table_set(&(instance->fields), AS_STRING(property_name_val), rhs_value);
@@ -716,7 +743,8 @@ static InterpretResult run() {
         ClassObj* klass = AS_CLASS(vm_stack_peek(1));
         ClosureObj* method = AS_CLOSURE(vm_stack_peek(0));
 
-        bool exist = table_set(&klass->methods, method_name, OBJ_VAL(method->obj));
+        bool exist =
+            table_set(&klass->methods, method_name, OBJ_VAL(method->obj));
         if (exist) {
           // deleting the class from global variable table,
           // if it's defined globally
@@ -727,6 +755,49 @@ static InterpretResult run() {
         }
 
         vm_stack_pop();
+        break;
+      }
+      case OP_INVOKE: {
+        Value v_method_name = READ_CONST();
+        uint8_t param_count = READ_BYTE();
+
+        if (!(IS_STRING_OBJ(v_method_name))) {
+          panic("(OP_INVOKE) expect a string argument and a number argument.");
+        }
+
+        StringObj* method_name = AS_STRING(v_method_name);
+
+        Value v_instance = vm_stack_peek(param_count);
+        if (!IS_INSTANCE_OBJ(v_instance)) {
+          runtime_error("The receiver is not an instance.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        ClassObj* klass = AS_INSTANCE(v_instance)->klass;
+        Value callable_val;
+
+        // check if there is any property defined with the name
+        if (table_get(&AS_INSTANCE(v_instance)->fields, method_name, &callable_val)) {
+          if (!callable(callable_val)) {
+            runtime_error("property is not callable.");
+            return INTERPRET_RUNTIME_ERROR;
+          }
+        } else {
+          // resolve method
+          if (!table_get(&klass->methods, method_name, &callable_val)) {
+            runtime_error("Class '%s' doesn't have method/property '%s'.", klass->name->chars, AS_CSTRING(v_method_name));
+            return INTERPRET_RUNTIME_ERROR;
+          }
+
+          if (!IS_CLOSURE_OBJ(callable_val)) {
+            panic("'method' must be a closure.");
+          }
+        }
+
+        if (!call_value(callable_val, param_count)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
         break;
       }
     }

@@ -64,11 +64,11 @@ typedef struct {
    *    }
    * }
    *
-   * Then, the value stack when this scope is executed looks like this: 
+   * Then, the value stack when this scope is executed looks like this:
    * value stack: [a] [b] [getB] [getA]
    *
    * In this case, only 'a' and 'b' are refered inside functions. Then, there
-   * are two upvalues refering two them and they are ordered by the addresses 
+   * are two upvalues refering two them and they are ordered by the addresses
    * of their counterpart in the value stack:
    *
    * Open upvalues: [Upvalue (referring to a)] [Upvalue (referring to b)]
@@ -110,6 +110,10 @@ typedef struct {
     size_t allocated;
     size_t threshold;
   } gc;
+
+  // The method name of class initializers. In this case, it's
+  // literally equivalent to 'init'.
+  StringObj* cls_init_strlit;
 } VM;
 
 typedef enum {

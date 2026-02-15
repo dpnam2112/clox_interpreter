@@ -72,7 +72,7 @@ typedef enum {
   OP_SET_PROPERTY_LONG,
   OP_METHOD,
   OP_METHOD_LONG,
-  META_LINE_NUM,
+  OP_INVOKE,
 } Opcode;
 
 /** Used to keep track of line numbers of bytecodes.

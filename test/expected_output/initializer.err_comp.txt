@@ -1,0 +1,1 @@
+On line 5, at token 'return': Can't return a value from an initializer.

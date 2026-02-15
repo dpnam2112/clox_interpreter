@@ -1,0 +1,12 @@
+'== Test: property assignment =='
+1
+true
+false
+'== Test: Callable property =='
+0
+1
+55
+610
+10946
+'== Test: Re-assign a property =='
+'Hello!'

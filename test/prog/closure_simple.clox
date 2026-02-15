@@ -86,3 +86,27 @@ if (r1 == 201 and r2 == 202 and r3 == 203 and r4 == 204 and r5 == 204) {
 } else {
   print "Failed";
 }
+
+print "Test multiple upvalues...";
+fun foo(a, b, c) {
+  {
+    var x = a;
+    {
+      var z = b;
+      {
+        var y = c;
+        fun sum() {
+          return a + b + c + 2*x + 3*y + 4*z;
+        }
+
+        return sum;
+      }
+    }
+  }
+}
+
+if (foo(1, 2, 3)() == 25) {
+  print "OK";
+} else {
+  print "Failed";
+}
