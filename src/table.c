@@ -1,5 +1,6 @@
 #include "table.h"
 #include <assert.h>
+#include <stdio.h>
 #include "memory.h"
 #include "object.h"
 #include "value.h"
@@ -113,6 +114,14 @@ void table_remove_unmarked_object(Table* table) {
     Entry* entry = &table->entries[i];
     if (entry->key != NULL && !entry->key->obj.gc_marked) {
       table_delete(table, entry->key, NULL);
+    }
+  }
+}
+
+void table_add_all(Table* dest, Table* src) {
+  for (Entry* ent = src->entries; ent < src->entries + src->capacity; ent++) {
+    if (ent->key != NULL) {
+      table_set(dest, ent->key, ent->value);
     }
   }
 }

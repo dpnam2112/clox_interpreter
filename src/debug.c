@@ -253,6 +253,12 @@ int disassemble_inst(Chunk* chunk, size_t offset) {
       return simple_instruction("OP_EXIT", offset);
     case OP_INVOKE:
       return invoke_instruction("OP_INVOKE", chunk, offset);
+    case OP_INHERIT:
+      return simple_instruction("OP_INHERIT", offset);
+    case OP_GET_SUPER:
+      return const_instruction("OP_GET_SUPER", chunk, offset);
+    case OP_GET_SUPER_LONG:
+      return const_long_instruction("OP_GET_SUPER_LONG", chunk, offset);
     default:
       printf("Unknown opcode\n");
       return offset + 1;

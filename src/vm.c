@@ -662,9 +662,7 @@ static InterpretResult run() {
           vm_stack_push(property);
         } else if (table_get(&instance->klass->methods, AS_STRING(name),
                              &method)) {
-          if (!IS_CLOSURE_OBJ(method)) {
-            panic("method must be a closure.");
-          }
+          assert(IS_CLOSURE_OBJ(method));
 
           BoundMethodObj* bmethod =
               BoundMethodObj_construct(top, AS_CLOSURE(method));
@@ -800,6 +798,60 @@ static InterpretResult run() {
           return INTERPRET_RUNTIME_ERROR;
         }
 
+        break;
+      }
+      case OP_INHERIT: {
+        /* Copy all methods from the superclass to the method table of the subclass.
+         *
+         * Value stack's pre-condition:
+         * == Stack ==
+         * ... <superclass> <subclass>
+         * ===========
+         *
+         * Value stack's post-condition:
+         * == Stack ==
+         * ... <superclass>
+         * ===========
+         */
+        Value v_supercls = vm_stack_peek(0);
+        Value v_subcls = vm_stack_peek(1);
+
+        if (!IS_CLASS_OBJ(v_subcls)) {
+          panic("OP_INHERIT");
+        }
+
+        if (!IS_CLASS_OBJ(v_supercls)) {
+          runtime_error("Superclass must be a class.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        ClassObj* supercls = AS_CLASS(v_supercls);
+        ClassObj* subcls = AS_CLASS(v_subcls);
+        table_add_all(&subcls->methods, &supercls->methods);
+        vm_stack_pop();
+        break;
+      }
+      case OP_GET_SUPER:
+      case OP_GET_SUPER_LONG: {
+        /* OP_GET_SUPER: Create a bound method object from the instance receiver
+         * and the method resolved from the superclass.
+         */
+
+        Value v_super_cls = vm_stack_peek(1);
+        Value v_receiver = vm_stack_peek(0);
+        Value method_name = (inst == OP_GET_SUPER) ? READ_CONST() : READ_CONST_LONG();
+
+        assert(IS_CLASS_OBJ(v_super_cls) && IS_INSTANCE_OBJ(v_receiver) && IS_STRING_OBJ(method_name));
+        Value v_method;
+
+        if (!table_get(&AS_CLASS(v_super_cls)->methods, AS_STRING(method_name), &v_method)) {
+          runtime_error("Superclass '%s' doesn't have method '%s'.", AS_CSTRING(method_name), AS_CLOSURE(v_method)->function->name->chars);
+        }
+
+        BoundMethodObj* bmethod = BoundMethodObj_construct(v_receiver, AS_CLOSURE(v_method));
+        vm_stack_pop();
+        vm_stack_pop();
+        vm_stack_push(OBJ_VAL(bmethod->obj));
         break;
       }
     }
