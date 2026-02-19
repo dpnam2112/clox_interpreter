@@ -16,9 +16,12 @@
 #include "debug.h"
 #endif
 
-#define SYNTHETIC_TK_THIS ((Token){.type = TK_THIS, .start = "this", .length = 4, .line = 0})
-#define SYNTHETIC_TK_SUPER ((Token){.type = TK_SUPER, .start = "super", .length = 5, .line = 0})
-#define SYNTHETIC_TK_PLACEHOLDER ((Token){.type = TK_EOF, .start = "", .length = 0, .line = 0})
+#define SYNTHETIC_TK_THIS \
+  ((Token){.type = TK_THIS, .start = "this", .length = 4, .line = 0})
+#define SYNTHETIC_TK_SUPER \
+  ((Token){.type = TK_SUPER, .start = "super", .length = 5, .line = 0})
+#define SYNTHETIC_TK_PLACEHOLDER \
+  ((Token){.type = TK_EOF, .start = "", .length = 0, .line = 0})
 
 typedef struct IntArr {
   int* head;
@@ -247,7 +250,6 @@ static void int_arr_append(IntArr* arr, int item) {
 }
 
 static void add_local(Token name) {
-
   /** TODO: handle the case in which number of items
    * exceeds 255 (UINT8_MAX) */
   current->locals[current->local_count] =
@@ -303,7 +305,6 @@ static void compiler_init(Compiler* compiler, FunctionType type) {
   } else {
     add_local(SYNTHETIC_TK_PLACEHOLDER);
   }
-
 }
 
 void parser_init() {
@@ -588,7 +589,9 @@ static void emit_get_variable(uint32_t name_offset) {
   Value name;
   chunk_get_const(current_chunk(), name_offset, &name);
   assert(IS_STRING_OBJ(name));
-  Token tk_name = { .start = AS_CSTRING(name), .length = AS_STRING(name)->length, .type = TK_IDENTIFIER };
+  Token tk_name = {.start = AS_CSTRING(name),
+                   .length = AS_STRING(name)->length,
+                   .type = TK_IDENTIFIER};
   if (!emit_get_either_local_or_upval(tk_name)) {
     emit_op_get_global(name_offset);
   }
@@ -708,7 +711,7 @@ static void this_() {
 }
 
 /* super_: Parse and emit bytecodes to resolve superclass's method.
- * 
+ *
  * 'super' cannot be used as a standalone variable, unlike 'this'.
  * Hence, we only allow usage of 'super' in get-method expression,
  * e.g., `super.method();`.
@@ -722,15 +725,17 @@ static void super_() {
     error(&parser.prev, "Can't use 'super' in a class with no superclass.");
   }
 
-  uint32_t method_name_offset = parse_identifier("Expect superclass method name.");
+  uint32_t method_name_offset =
+      parse_identifier("Expect superclass method name.");
 
   emit_get_either_local_or_upval(SYNTHETIC_TK_SUPER);
   emit_get_either_local_or_upval(SYNTHETIC_TK_THIS);
 
   if (method_name_offset <= UINT8_MAX) {
-    emit_param_inst(OP_GET_SUPER, (uint8_t) method_name_offset, 1);
+    emit_param_inst(OP_GET_SUPER, (uint8_t)method_name_offset, 1);
   } else {
-    emit_param_inst(OP_GET_SUPER_LONG, method_name_offset, LONG_CONST_OFFSET_SIZE);
+    emit_param_inst(OP_GET_SUPER_LONG, method_name_offset,
+                    LONG_CONST_OFFSET_SIZE);
   }
 }
 

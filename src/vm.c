@@ -791,7 +791,8 @@ static InterpretResult run() {
         break;
       }
       case OP_INHERIT: {
-        /* Copy all methods from the superclass to the method table of the subclass.
+        /* Copy all methods from the superclass to the method table of the
+         * subclass.
          *
          * Value stack's pre-condition:
          * == Stack ==
@@ -829,16 +830,22 @@ static InterpretResult run() {
 
         Value v_super_cls = vm_stack_peek(1);
         Value v_receiver = vm_stack_peek(0);
-        Value method_name = (inst == OP_GET_SUPER) ? READ_CONST() : READ_CONST_LONG();
+        Value method_name =
+            (inst == OP_GET_SUPER) ? READ_CONST() : READ_CONST_LONG();
 
-        assert(IS_CLASS_OBJ(v_super_cls) && IS_INSTANCE_OBJ(v_receiver) && IS_STRING_OBJ(method_name));
+        assert(IS_CLASS_OBJ(v_super_cls) && IS_INSTANCE_OBJ(v_receiver) &&
+               IS_STRING_OBJ(method_name));
         Value v_method;
 
-        if (!table_get(&AS_CLASS(v_super_cls)->methods, AS_STRING(method_name), &v_method)) {
-          runtime_error("Superclass '%s' doesn't have method '%s'.", AS_CSTRING(method_name), AS_CLOSURE(v_method)->function->name->chars);
+        if (!table_get(&AS_CLASS(v_super_cls)->methods, AS_STRING(method_name),
+                       &v_method)) {
+          runtime_error("Superclass '%s' doesn't have method '%s'.",
+                        AS_CSTRING(method_name),
+                        AS_CLOSURE(v_method)->function->name->chars);
         }
 
-        BoundMethodObj* bmethod = BoundMethodObj_construct(v_receiver, AS_CLOSURE(v_method));
+        BoundMethodObj* bmethod =
+            BoundMethodObj_construct(v_receiver, AS_CLOSURE(v_method));
         vm_stack_pop();
         vm_stack_pop();
         vm_stack_push(OBJ_VAL(bmethod->obj));

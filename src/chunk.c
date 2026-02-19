@@ -1,9 +1,9 @@
 #include "chunk.h"
 #include <string.h>
 
+#include <assert.h>
 #include <complex.h>
 #include <stdint.h>
-#include <assert.h>
 
 #include "memory.h"
 #include "object.h"
