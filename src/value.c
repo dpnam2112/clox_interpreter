@@ -74,12 +74,12 @@ void print_object(Value val) {
       break;
     case OBJ_FUNCTION: {
       FunctionObj* func = AS_FUNCTION(val);
-      if (!func->name)
-        printf("<fn>");
+      if (func->name == NULL)
+        printf("<script>");
       else if (strcmp(func->name->chars, "") != 0)
         printf("<fn '%s'>", func->name->chars);
       else
-        printf("<script>");
+        printf("<fn ?\?>");
       break;
     }
     case OBJ_UPVALUE:

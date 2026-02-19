@@ -1,0 +1,20 @@
+print "Begin" + " testing gc";
+{
+  var Foo = nil;
+  {
+    class Foo_ {
+      fun init(a, b, c) {
+        this.ab = a + b;
+        this.bc = b + c;
+        this.ca = c + a;
+      }
+
+      fun getab() {
+        return this.ab;
+      }
+    }
+    Foo = Foo_;
+  }
+  print Foo("foo arg 1", "foo arg 2", "foo arg 3").getab();
+}
+print "End" + " testing gc";

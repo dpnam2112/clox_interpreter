@@ -8,6 +8,7 @@
 
 #define STACK_MAX 256
 #define CALL_FRAME_MAX 64
+#define GC_THRESHOLD 1024;
 
 typedef struct {
   ClosureObj* closure;

@@ -78,7 +78,7 @@ void vm_init(bool repl) {
   vm.gc.count = 0;
   vm.gc.capacity = 0;
   vm.gc.allocated = 0;
-  vm.gc.threshold = 2 << 8;
+  vm.gc.threshold = GC_THRESHOLD;
 
   vm.cls_init_strlit = NULL;
   vm.cls_init_strlit = StringObj_construct("init", 4);
@@ -295,7 +295,8 @@ static UpvalueObj* capture_upval(Value* value) {
   // Iterate through the linked list of upvalues until
   // An upvalue object that references to @value is found
 
-  UpvalueObj *prev = NULL, *current = vm.open_upvalues;
+  UpvalueObj* prev = NULL;
+  UpvalueObj* current = vm.open_upvalues;
   while (current != NULL && value < current->value) {
     prev = current;
     current = current->next;
@@ -310,6 +311,7 @@ static UpvalueObj* capture_upval(Value* value) {
     new_upvalue->next = prev->next;
     prev->next = new_upvalue;
   } else {
+    new_upvalue->next = vm.open_upvalues;
     vm.open_upvalues = new_upvalue;
   }
 
@@ -329,9 +331,10 @@ static UpvalueObj* capture_upval(Value* value) {
 static void close_upvalues(Value* last) {
   while (vm.open_upvalues != NULL && vm.open_upvalues->value >= last) {
     UpvalueObj* closed_upval = vm.open_upvalues;
+    vm.open_upvalues = closed_upval->next;
+
     closed_upval->cloned = *(closed_upval->value);
     closed_upval->value = &closed_upval->cloned;
-    vm.open_upvalues = closed_upval->next;
     closed_upval->next = NULL;
   }
 }
@@ -587,7 +590,7 @@ static InterpretResult run() {
           uint32_t upvalue_pos = (long_offset) ? READ_BYTES(2) : READ_BYTE();
 
           if (local) {
-            closure->upvalues[i] = capture_upval(frame->slots + upvalue_pos);
+            closure->upvalues[i] = capture_upval(&frame->slots[upvalue_pos]);
           } else {
             closure->upvalues[i] = frame->closure->upvalues[upvalue_pos];
           }

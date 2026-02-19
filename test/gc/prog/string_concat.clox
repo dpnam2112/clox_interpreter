@@ -1,0 +1,20 @@
+print "Be" + "gin" + " testing gc";
+print "a" + "b";
+print "cde" + "fg";
+print "Hello" + " " + "World" + "!";
+var hello = "hello" + "!";
+
+{
+  var inside = "inside";
+  var scope = "scope";
+  print "a" + "b";
+  print inside + " " + scope;
+  print inside + " " + scope + " 2";
+}
+
+fun concat(a, b) {
+  return a + b;
+}
+
+print concat("Arg 1", concat("Arg 2", "Arg 3"));
+print "End" + " testing gc";

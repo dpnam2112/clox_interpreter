@@ -5,7 +5,6 @@
 #include <stdint.h>
 
 typedef enum {
-  VAL_INTERR,  // represent the internal errors
   VAL_BOOL,
   VAL_NIL,
   VAL_NUMBER,

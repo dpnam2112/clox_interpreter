@@ -1,0 +1,20 @@
+print "Begin" + " testing gc";
+{
+  print "Begin" + " scope";
+  var ab = "a" + "b";
+  var closure = nil;
+  {
+      var cd = "c" + "d";
+      {
+        var ef = "e" + "f";
+        fun closure_() {
+          return ab + cd + ef;
+        }
+        closure = closure_;
+      }
+  }
+
+  closure();
+  print "End" + " scope";
+}
+print "End" + " testing gc";
