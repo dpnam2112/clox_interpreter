@@ -116,3 +116,11 @@ void table_remove_unmarked_object(Table* table) {
     }
   }
 }
+
+void table_add_all(Table* dest, Table* src) {
+  for (Entry* ent = src->entries; ent < src->entries + src->capacity; ent++) {
+    if (ent->key != NULL) {
+      table_set(dest, ent->key, ent->value);
+    }
+  }
+}

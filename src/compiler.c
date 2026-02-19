@@ -1,8 +1,8 @@
 #include "compiler.h"
 
+#include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "chunk.h"
@@ -15,6 +15,13 @@
 #ifdef DBG_DISASSEMBLE
 #include "debug.h"
 #endif
+
+#define SYNTHETIC_TK_THIS \
+  ((Token){.type = TK_THIS, .start = "this", .length = 4, .line = 0})
+#define SYNTHETIC_TK_SUPER \
+  ((Token){.type = TK_SUPER, .start = "super", .length = 5, .line = 0})
+#define SYNTHETIC_TK_PLACEHOLDER \
+  ((Token){.type = TK_EOF, .start = "", .length = 0, .line = 0})
 
 typedef struct IntArr {
   int* head;
@@ -82,8 +89,18 @@ typedef struct Compiler {
   int upval_count;
 } Compiler;
 
+/* ClassCompiler: track the information of the current class
+ * being compiled.
+ *
+ * Since the class might be declared inside scopes, e.g.,
+ * a method body, we need to organize ClassCompiler like a stack:
+ * When the compiler encounters a class declaration, we push
+ * a ClassCompiler to this stack, and pop it when the compiler
+ * finishes compiling that class (see `void class_declaration()`).
+ */
 typedef struct ClassCompiler {
   struct ClassCompiler* enclosing;
+  bool has_supercls;
 } ClassCompiler;
 
 typedef void (*ParseFn)();
@@ -124,6 +141,9 @@ static void and_();
 static void or_();
 static void call();
 static void this_();
+static void super_();
+static void emit_get_variable(uint32_t name_offset);
+static bool emit_get_either_local_or_upval(Token name);
 static void emit_op_get_global(uint32_t iden_offset);
 static void emit_op_get_local(uint32_t stack_index);
 static void emit_op_get_upvalue(uint32_t upvalue_index);
@@ -166,7 +186,7 @@ ParseRule parse_rules[] = {
     [TK_OR] = {NULL, or_, PREC_OR},
     [TK_PRINT] = {NULL, NULL, PREC_NONE},
     [TK_RETURN] = {NULL, NULL, PREC_NONE},
-    [TK_SUPER] = {NULL, NULL, PREC_NONE},
+    [TK_SUPER] = {super_, NULL, PREC_NONE},
     [TK_THIS] = {this_, NULL, PREC_NONE},
     [TK_VAR] = {NULL, NULL, PREC_NONE},
     [TK_WHILE] = {NULL, NULL, PREC_NONE},
@@ -281,9 +301,9 @@ static void compiler_init(Compiler* compiler, FunctionType type) {
 
   // reserve the first slot for VM's internal use
   if (type == TYPE_METHOD || type == TYPE_INITIALIZER) {
-    add_local((Token){TK_THIS, "this", 4, 0});
+    add_local(SYNTHETIC_TK_THIS);
   } else {
-    add_local((Token){TK_EOF, "", 0, 0});
+    add_local(SYNTHETIC_TK_PLACEHOLDER);
   }
 }
 
@@ -461,7 +481,7 @@ static bool identifier_equal(Token* tk_1, Token* tk_2) {
  */
 static void parse_precedence(Precedence prec) {
   // a valid expression always start with a prefix expression
-  // or a literal. E.g: -1, a + 1, b.a, .etc
+  // or a literal. E.g: -1, a + 1, b.a, etc.
 
   advance();  // consume the prefix operator or a literal
   ParseFn prefix_rule = get_rule(parser.prev.type)->prefix;
@@ -526,9 +546,6 @@ static int resolve_upvalue(Compiler* compiler, Token* name) {
 
 static void call() {
   int param_count = parameter_list();
-  if (param_count >= MAX_CALLARGS) {
-    error(&parser.prev, "Exceed argument limit.");
-  }
   emit_byte(OP_CALL);
   emit_byte(param_count);
 }
@@ -565,6 +582,18 @@ static void assignment() {
     emit_param_inst(OP_SET_GLOBAL_LONG, iden_offset, LONG_CONST_OFFSET_SIZE);
 }
 
+static void emit_get_variable(uint32_t name_offset) {
+  Value name;
+  chunk_get_const(current_chunk(), name_offset, &name);
+  assert(IS_STRING_OBJ(name));
+  Token tk_name = {.start = AS_CSTRING(name),
+                   .length = AS_STRING(name)->length,
+                   .type = TK_IDENTIFIER};
+  if (!emit_get_either_local_or_upval(tk_name)) {
+    emit_op_get_global(name_offset);
+  }
+}
+
 static void variable() {
   parser.consumed_identifier = parser.prev;
   uint32_t offset = identifier_constant(&parser.prev);
@@ -574,16 +603,24 @@ static void variable() {
   if (parser.current.type == TK_EQUAL)
     return;
 
-  int stack_index = resolve_local(current, &parser.prev);
+  if (!emit_get_either_local_or_upval(parser.prev)) {
+    emit_op_get_global(offset);
+  }
+}
+
+static bool emit_get_either_local_or_upval(Token name) {
+  int stack_index = resolve_local(current, &name);
   int upvalue_index = 0;
 
   if (stack_index != -1) {
     emit_op_get_local(stack_index);
-  } else if ((upvalue_index = resolve_upvalue(current, &parser.prev)) != -1) {
+    return true;
+  } else if ((upvalue_index = resolve_upvalue(current, &name)) != -1) {
     emit_op_get_upvalue(upvalue_index);
-  } else {
-    emit_op_get_global(offset);
+    return true;
   }
+
+  return false;
 }
 
 static void declaration() {
@@ -670,13 +707,55 @@ static void this_() {
   variable();
 }
 
+/* super_: Parse and emit bytecodes to resolve superclass's method.
+ *
+ * 'super' cannot be used as a standalone variable, unlike 'this'.
+ * Hence, we only allow usage of 'super' in get-method expression,
+ * e.g., `super.method();`.
+ */
+static void super_() {
+  consume(TK_DOT, "Expect '.' after 'super'.");
+
+  if (cur_cls == NULL) {
+    error(&parser.prev, "Can't use 'super' outside of a class.");
+  } else if (!cur_cls->has_supercls) {
+    error(&parser.prev, "Can't use 'super' in a class with no superclass.");
+  }
+
+  uint32_t method_name_offset =
+      parse_identifier("Expect superclass method name.");
+
+  emit_get_either_local_or_upval(SYNTHETIC_TK_THIS);
+
+  if (match(TK_LEFT_PAREN)) {
+    int param_count = parameter_list();
+
+    emit_get_either_local_or_upval(SYNTHETIC_TK_SUPER);
+    if (method_name_offset <= UINT8_MAX) {
+      emit_param_inst(OP_SUPER_INVOKE, (uint8_t)method_name_offset, 1);
+    } else {
+      emit_param_inst(OP_SUPER_INVOKE_LONG, method_name_offset,
+                      LONG_CONST_OFFSET_SIZE);
+    }
+    emit_byte(param_count);
+  } else {
+    emit_get_either_local_or_upval(SYNTHETIC_TK_SUPER);
+    if (method_name_offset <= UINT8_MAX) {
+      emit_param_inst(OP_GET_SUPER, (uint8_t)method_name_offset, 1);
+    } else {
+      emit_param_inst(OP_GET_SUPER_LONG, method_name_offset,
+                      LONG_CONST_OFFSET_SIZE);
+    }
+  }
+}
+
 /* var_declaration(): parse the var declaration statement
  * Bytecode form:<EXPRESSION> OP_DEFINE <OFFSET>, where
  *
  * <EXPRESSION>: bytecode form of the right-hand side expression
  * <OFFSET>: offset of the string object representing the identifier,
  * takes up three bytes
- * */
+ */
 static void var_declaration() {
   // parse the identifier and construct a string object (StringObj)
   // representing the identifier. The object is put in the constant pool.
@@ -723,6 +802,7 @@ static void end_scope() {
   current->scope_depth--;
 }
 
+// TODO: force return type to be uint8_t.
 static int parameter_list() {
   int param_count = 0;
   if (!check(TK_RIGHT_PAREN)) {
@@ -733,6 +813,9 @@ static int parameter_list() {
   }
 
   consume(TK_RIGHT_PAREN, "Expect ')' after list of parameters.");
+  if (param_count >= MAX_CALLARGS) {
+    error(&parser.prev, "Exceed limit of number of parameters.");
+  }
   return param_count;
 }
 
@@ -743,15 +826,12 @@ static int parameter_list() {
 static void function(FunctionType type) {
   Compiler compiler;
   compiler_init(&compiler, type);
-  begin_scope();
 
+  begin_scope();
   consume(TK_LEFT_PAREN, "Expect '(' after function name.");
   int param_count = 0;
   if (!check(TK_RIGHT_PAREN)) {
     do {
-      if (param_count >= MAX_CALLARGS) {
-        error(&parser.prev, "Exceed limit of number of parameters.");
-      }
       uint32_t name = parse_identifier("Expect parameter's name.");
       declare_variable(parser.consumed_identifier);
       define_variable(name);
@@ -775,9 +855,9 @@ static void function(FunctionType type) {
   }
 }
 
-/** class_declaration: emit instructions to define class
+/* class_declaration: emit instructions to define class
  * and incrementally add defined methods to that class.
- * */
+ */
 static void class_declaration() {
   // Offset of the identifier in the chunk's array of values
   uint32_t name_offset =
@@ -790,36 +870,60 @@ static void class_declaration() {
     emit_param_inst(OP_CLASS_LONG, name_offset, LONG_CONST_OFFSET_SIZE);
   }
 
+  // utilize the stack memory space of the class_declaration
+  // so we don't need to request memory from the kernel via malloc(),
+  // which may cause overhead from user-kernel mode switching.
   ClassCompiler cls_cmpl;
   cls_cmpl.enclosing = cur_cls;
+  cls_cmpl.has_supercls = false;
   cur_cls = &cls_cmpl;
 
-  // initially I thought I could ignore this define_variable() call.
-  // but it's necessary to implement inheritance in the next chapter.
-  // Read the note: 'The preceding call to defineVariable()...'
-  // in the chapter 'Methods and initializers'.
   define_variable(name_offset);
-  consume(TK_LEFT_BRACE, "Expect '{' before class's body.");
-  if (current->scope_depth == 0) {
-    emit_op_get_global(name_offset);
+
+  if (match(TK_LESS)) {
+    consume(TK_IDENTIFIER, "Expect superclass name after '<'.");
+
+    // emit instructions to load superclass to the stack
+    variable();
+    // emit instructions to load subclass to the stack
+    emit_get_variable(name_offset);
+    emit_byte(OP_INHERIT);
+
+    cur_cls->has_supercls = true;
+
+    // declare lexical variable 'super' so 'super' expression would work
+    // inside methods (via the upvalue mechanism).
+    begin_scope();
+    // OP_INHERIT only pops the subclass so we don't need to
+    // push superclass to the stack again in this case.
+    declare_variable(SYNTHETIC_TK_SUPER);
+    define_variable(0);
   }
 
+  consume(TK_LEFT_BRACE, "Expect '{' before class's body.");
+
+  // reload the subclass to the value stack to define methods for it.
+  emit_get_variable(name_offset);
   while (!(check(TK_RIGHT_BRACE) || check(TK_EOF))) {
     method();
   }
 
-  consume(TK_RIGHT_BRACE, "Expect '}' after class's body.");
-  if (current->scope_depth == 0) {
-    emit_byte(OP_POP);
+  // pop the subclass after defining methods.
+  emit_byte(OP_POP);
+  if (cur_cls->has_supercls) {
+    end_scope();
   }
+
+  cur_cls = cur_cls->enclosing;
+  consume(TK_RIGHT_BRACE, "Expect '}' after class's body.");
 }
 
-/** method: parse a method declaration.
+/* method: parse a method declaration.
  * the emitted instruction would look like this:
  * 1. OP_CLOSURE: load the closure from the constant pool and capture all
  * upvalues.
  * 2. OP_METHOD: Add a name - closure associtation to the class' method table.
- * */
+ */
 static void method() {
   if (!match(TK_FUN)) {
     error(&parser.current, "Expect 'fun' at the start of method declaration.");
@@ -1217,9 +1321,6 @@ static void dot() {
     emit_param_inst(inst, iden_offset, iden_offset_size);
   } else if (match(TK_LEFT_PAREN)) {
     int param_count = parameter_list();
-    if (param_count >= MAX_CALLARGS) {
-      error(&parser.prev, "Exceed argument limit.");
-    }
     emit_byte(OP_INVOKE);
     emit_byte(iden_offset);
     emit_byte(param_count);

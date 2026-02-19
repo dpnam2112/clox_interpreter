@@ -1,6 +1,7 @@
 #include "chunk.h"
 #include <string.h>
 
+#include <assert.h>
 #include <complex.h>
 #include <stdint.h>
 
@@ -117,6 +118,11 @@ uint32_t chunk_add_const(Chunk* chunk, Value value) {
   value_arr_append(&chunk->constants, value);
   vm_stack_pop();
   return chunk->constants.size - 1;
+}
+
+void chunk_get_const(Chunk* chunk, uint32_t offset, Value* dest) {
+  assert(offset < chunk->constants.size);
+  *dest = chunk->constants.values[offset];
 }
 
 void chunk_write_load_const(Chunk* chunk, Value value, uint16_t line) {

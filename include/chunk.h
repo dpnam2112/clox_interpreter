@@ -73,6 +73,12 @@ typedef enum {
   OP_METHOD,
   OP_METHOD_LONG,
   OP_INVOKE,
+  OP_INVOKE_LONG,
+  OP_INHERIT,
+  OP_GET_SUPER,
+  OP_GET_SUPER_LONG,
+  OP_SUPER_INVOKE,
+  OP_SUPER_INVOKE_LONG,
 } Opcode;
 
 /** Used to keep track of line numbers of bytecodes.
@@ -111,6 +117,7 @@ void chunk_append_bytes(Chunk* chunk, void* bytes, int n);
  * TODO: how should this behave if the constant pool is full?
  * */
 uint32_t chunk_add_const(Chunk* chunk, Value value);
+void chunk_get_const(Chunk* chunk, uint32_t offset, Value* dest);
 
 /* write a load instruction that loads @value from constant pool to bytecode
  * array */

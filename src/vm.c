@@ -662,9 +662,7 @@ static InterpretResult run() {
           vm_stack_push(property);
         } else if (table_get(&instance->klass->methods, AS_STRING(name),
                              &method)) {
-          if (!IS_CLOSURE_OBJ(method)) {
-            panic("method must be a closure.");
-          }
+          assert(IS_CLOSURE_OBJ(method));
 
           BoundMethodObj* bmethod =
               BoundMethodObj_construct(top, AS_CLOSURE(method));
@@ -743,23 +741,15 @@ static InterpretResult run() {
         ClassObj* klass = AS_CLASS(vm_stack_peek(1));
         ClosureObj* method = AS_CLOSURE(vm_stack_peek(0));
 
-        bool exist =
-            table_set(&klass->methods, method_name, OBJ_VAL(method->obj));
-        if (exist) {
-          // deleting the class from global variable table,
-          // if it's defined globally
-          table_delete(&vm.globals, klass->name, NULL);
-          runtime_error("Duplicate method name ('%s') in class '%s'.",
-                        method_name->chars, klass->name->chars);
-          return INTERPRET_RUNTIME_ERROR;
-        }
-
+        table_set(&klass->methods, method_name, OBJ_VAL(method->obj));
         vm_stack_pop();
         break;
       }
-      case OP_INVOKE: {
-        Value v_method_name = READ_CONST();
-        uint8_t param_count = READ_BYTE();
+      case OP_INVOKE:
+      case OP_INVOKE_LONG: {
+        Value v_method_name =
+            (inst == OP_INVOKE) ? READ_CONST() : READ_CONST_LONG();
+        uint32_t param_count = READ_BYTE();
 
         if (!(IS_STRING_OBJ(v_method_name))) {
           panic("(OP_INVOKE) expect a string argument and a number argument.");
@@ -802,6 +792,120 @@ static InterpretResult run() {
 
         break;
       }
+      case OP_INHERIT: {
+        /* Copy all methods from the superclass to the method table of the
+         * subclass.
+         *
+         * Value stack's pre-condition:
+         * == Stack ==
+         * ... <superclass> <subclass>
+         * ===========
+         *
+         * Value stack's post-condition:
+         * == Stack ==
+         * ... <superclass>
+         * ===========
+         */
+        Value v_supercls = vm_stack_peek(1);
+        Value v_subcls = vm_stack_peek(0);
+
+        if (!IS_CLASS_OBJ(v_subcls)) {
+          panic("OP_INHERIT");
+        }
+
+        if (!IS_CLASS_OBJ(v_supercls)) {
+          runtime_error("Superclass must be a class.");
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        ClassObj* supercls = AS_CLASS(v_supercls);
+        ClassObj* subcls = AS_CLASS(v_subcls);
+        table_add_all(&subcls->methods, &supercls->methods);
+        vm_stack_pop();
+        break;
+      }
+      case OP_GET_SUPER:
+      case OP_GET_SUPER_LONG: {
+        /* OP_GET_SUPER: Create a bound method object from the instance receiver
+         * and the method resolved from the superclass.
+         */
+
+        // receiver might be a result of a constructor call, not from a
+        // variable. If we pop the stack to obtain the receiver then the garbage
+        // collector might accidentally mark the receiver during the execution.
+        Value v_super_cls = vm_stack_peek(0);
+        Value v_receiver = vm_stack_peek(1);
+        Value method_name =
+            (inst == OP_GET_SUPER) ? READ_CONST() : READ_CONST_LONG();
+
+        if (!(IS_CLASS_OBJ(v_super_cls) && IS_INSTANCE_OBJ(v_receiver) &&
+              IS_STRING_OBJ(method_name))) {
+          panic("(OP_GET_SUPER): Stack value pre-condition check failed.");
+        }
+        Value v_method;
+
+        if (!table_get(&AS_CLASS(v_super_cls)->methods, AS_STRING(method_name),
+                       &v_method)) {
+          runtime_error("Superclass '%s' doesn't have method '%s'.",
+                        AS_CSTRING(method_name),
+                        AS_CLOSURE(v_method)->function->name->chars);
+        }
+
+        BoundMethodObj* bmethod =
+            BoundMethodObj_construct(v_receiver, AS_CLOSURE(v_method));
+        vm_stack_pop();
+        vm_stack_pop();
+        vm_stack_push(OBJ_VAL(bmethod->obj));
+        break;
+      }
+      case OP_SUPER_INVOKE:
+      case OP_SUPER_INVOKE_LONG: {
+        /* OP_SUPER_INVOKE: invoke super method.
+         *
+         * Value stack pre-condition:
+         * == Stack ==
+         * ... <subclass instance> <arg 1> <arg2> ... <arg n> <superclass>
+         * ===========
+         *
+         * Value stack's post-condition:
+         * == Stack ==
+         * ... <subclass instance> <arg 1> <arg2> ... <arg n>
+         * ===========
+         *
+         * The first slot in the method's array of local variables will point
+         * to the subclass instance.
+         */
+        Value method_name =
+            (inst == OP_SUPER_INVOKE) ? READ_CONST() : READ_CONST_LONG();
+        if (!IS_STRING_OBJ(method_name)) {
+          panic("(OP_SUPER_INVOKE) expect method_name to be a string.");
+        }
+
+        Value v_super_cls = vm_stack_pop();
+        if (!IS_CLASS_OBJ(v_super_cls)) {
+          panic("(OP_SUPER_INVOKE) expect stack top to be a class.");
+        }
+
+        // get the method from superclass
+        Value method;
+        if (!table_get(&AS_CLASS(v_super_cls)->methods, AS_STRING(method_name),
+                       &method)) {
+          runtime_error("Superclass '%s' doesn't have method '%s'.",
+                        AS_CSTRING(method_name),
+                        AS_CLOSURE(method)->function->name->chars);
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        if (!IS_CLOSURE_OBJ(method)) {
+          panic("(OP_SUPER_INVOKE) method must be a closure.");
+        }
+
+        uint8_t param_count = READ_BYTE();
+        if (!call_value(method, param_count)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        break;
+      }
     }
   }
 
@@ -812,11 +916,6 @@ static InterpretResult run() {
 #undef READ_CONST_LONG
 #undef READ_CONST_AT
 #undef BINARY_OP
-}
-InterpretResult vm_interpret(Chunk* chunk) {
-  vm.chunk = chunk;
-  vm.pc = chunk->bytecodes;
-  return run();
 }
 
 InterpretResult interpret(const char* source) {
