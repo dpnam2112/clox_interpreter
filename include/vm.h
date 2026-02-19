@@ -127,8 +127,6 @@ extern VM vm;
 void vm_init(bool is_repl);
 void vm_free();
 
-InterpretResult vm_interpret(Chunk* chunk);
-
 void vm_stack_push(Value value);
 Value vm_stack_pop();
 int vm_stack_size();

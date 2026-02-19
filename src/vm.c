@@ -862,11 +862,6 @@ static InterpretResult run() {
 #undef READ_CONST_AT
 #undef BINARY_OP
 }
-InterpretResult vm_interpret(Chunk* chunk) {
-  vm.chunk = chunk;
-  vm.pc = chunk->bytecodes;
-  return run();
-}
 
 InterpretResult interpret(const char* source) {
   ClosureObj* closure = compile(source);
