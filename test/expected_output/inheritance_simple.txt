@@ -1,0 +1,15 @@
+'== Test: simple inheritance =='
+'Bob Patterson'
+'Senior electronic engineer'
+'Bob Patterson'
+25
+'Senior electronic engineer'
+'== Test: inheritance inside scope =='
+'Alice Patterson'
+23
+'College'
+'Electronic engineering'
+'Harry Patterson'
+23
+'College'
+'Computer engineering'

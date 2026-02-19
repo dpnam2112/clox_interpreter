@@ -741,17 +741,7 @@ static InterpretResult run() {
         ClassObj* klass = AS_CLASS(vm_stack_peek(1));
         ClosureObj* method = AS_CLOSURE(vm_stack_peek(0));
 
-        bool exist =
-            table_set(&klass->methods, method_name, OBJ_VAL(method->obj));
-        if (exist) {
-          // deleting the class from global variable table,
-          // if it's defined globally
-          table_delete(&vm.globals, klass->name, NULL);
-          runtime_error("Duplicate method name ('%s') in class '%s'.",
-                        method_name->chars, klass->name->chars);
-          return INTERPRET_RUNTIME_ERROR;
-        }
-
+        table_set(&klass->methods, method_name, OBJ_VAL(method->obj));
         vm_stack_pop();
         break;
       }
@@ -813,8 +803,8 @@ static InterpretResult run() {
          * ... <superclass>
          * ===========
          */
-        Value v_supercls = vm_stack_peek(0);
-        Value v_subcls = vm_stack_peek(1);
+        Value v_supercls = vm_stack_peek(1);
+        Value v_subcls = vm_stack_peek(0);
 
         if (!IS_CLASS_OBJ(v_subcls)) {
           panic("OP_INHERIT");

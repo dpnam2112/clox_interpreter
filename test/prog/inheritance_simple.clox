@@ -1,0 +1,77 @@
+print "== Test: simple inheritance ==";
+class Person {
+  fun init(name, age) {
+    this.name = name;
+    this.age = age;
+  }
+
+  fun getName() {
+    return this.name;
+  }
+
+  fun getAge() {
+    return this.age;
+  }
+}
+
+class Engineer < Person {
+  fun init(name, age, title) {
+    super.init(name, age);
+    this.title = title;
+  }
+
+  fun getTitle() {
+    return this.title;
+  }
+}
+
+var bob = Engineer("Bob Patterson", 25, "Senior electronic engineer");
+// try accessing fields
+print bob.name;
+print bob.title;
+
+// try invoking methods
+print bob.getName();
+print bob.getAge();
+print bob.getTitle();
+
+print "== Test: inheritance inside scope ==";
+// the class Student_ should be captured inside context of each method as an upvalue.
+var CollegeStudent = nil;
+{
+  class Student_ < Person {
+    fun init(name, age, level) {
+      super.init(name, age);
+      this.level = level;
+    }
+
+    fun getLevel() {
+      return this.level;
+    }
+  }
+
+  class CollegeStudent_ < Student_ {
+    fun init(name, age, major) {
+      super.init(name, age, "College");
+      this.major = major;
+    }
+
+    fun getMajor() {
+      return this.major;
+    }
+  }
+
+  var alice = CollegeStudent_("Alice Patterson", 23, "Electronic engineering");
+  print alice.getName();
+  print alice.getAge();
+  print alice.getLevel();
+  print alice.getMajor();
+
+  CollegeStudent = CollegeStudent_;
+}
+
+var harry = CollegeStudent("Harry Patterson", 23, "Computer engineering");
+print harry.getName();
+print harry.getAge();
+print harry.getLevel();
+print harry.getMajor();
