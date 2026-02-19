@@ -830,6 +830,9 @@ static InterpretResult run() {
          * and the method resolved from the superclass.
          */
 
+        // receiver might be a result of a constructor call, not from a variable.
+        // If we pop the stack to obtain the receiver then the garbage
+        // collector might accidentally mark the receiver during the execution.
         Value v_super_cls = vm_stack_peek(0);
         Value v_receiver = vm_stack_peek(1);
         Value method_name =

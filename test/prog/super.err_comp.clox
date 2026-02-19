@@ -1,0 +1,7 @@
+class Foo {
+  fun f() {
+    super.f();
+  }
+}
+
+Foo().f();
