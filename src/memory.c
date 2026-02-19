@@ -5,14 +5,14 @@
 #include "object.h"
 #include "vm.h"
 
-#ifdef DEBUG_LOG_GC
+#ifdef DBG_LOG_GC
 #include <stdio.h>
 
 #include "compiler.h"  // for mark_compiler_root()
 #include "debug.h"
 #endif
 
-#ifdef DEBUG_LOG_GC
+#ifdef DBG_LOG_GC
 /** used to print object, the output format is specific for debugging purpose
  */
 void dbg_print_object(Obj* obj) {
@@ -26,7 +26,7 @@ void* reallocate(void* arr, size_t old_sz, size_t new_sz) {
   vm.gc.allocated += (new_sz - old_sz);
 
   if (new_sz > old_sz) {
-#ifdef DEBUG_STRESS_GC
+#ifdef DBG_STRESS_GC
     collect_garbage();
 #else
     if (vm.gc.allocated >= vm.gc.threshold) {
@@ -83,6 +83,10 @@ void free_instance_obj(InstanceObj* instance) {
 }
 
 void free_object(Obj* object) {
+#ifdef DBG_LOG_GC
+  printf("Free object at %p, type %d\n", (void*)object, object->type);
+#endif
+
   switch (object->type) {
     case OBJ_STRING:
       free_string_obj((StringObj*)object);
@@ -108,10 +112,6 @@ void free_object(Obj* object) {
     default:
       break;
   }
-
-#ifdef DEBUG_LOG_GC
-  printf("Free object at %p, type %d\n", (void*)object, object->type);
-#endif
 }
 
 void free_objects() {
@@ -130,12 +130,12 @@ bool mark_object(Obj* obj) {
   if (obj == NULL)
     return false;
 
-#ifdef DEBUG_LOG_GC
+#ifdef DBG_LOG_GC
   if (!obj->gc_marked) {
-    printf("reach unmarked object: ", obj);
+    printf("reach unmarked object: ");
     dbg_print_object(obj);
   } else {
-    printf("reach marked object: ", obj);
+    printf("reach marked object: ");
     dbg_print_object(obj);
   }
   printf("\n");
@@ -202,11 +202,12 @@ void mark_reachable_objects(Obj* obj) {
         }
 
         mark_object((Obj*)closure->upvalues[i]);
-#ifdef DEBUG_LOG_GC
+#ifdef DBG_LOG_GC
         printf("Marked the object: ");
         dbg_print_object((Obj*)closure->upvalues[i]);
         printf(", reachable from: ");
         dbg_print_object(obj);
+        printf("\n");
 #endif
       }
       break;
@@ -254,7 +255,7 @@ void mark_reachable_objects(Obj* obj) {
 void discover_all_reachable() {
   while (!gc_empty()) {
     Obj* obj = gc_pop();
-#ifdef DEBUG_LOG_GC
+#ifdef DBG_LOG_GC
     printf("Marking all reachable objects of: ");
     dbg_print_object(obj);
     printf("\n");
@@ -287,7 +288,7 @@ void sweep_unreachable() {
 }
 
 void collect_garbage() {
-#ifdef DEBUG_LOG_GC
+#ifdef DBG_LOG_GC
   printf("== begin gc ==\n");
 #endif
 
@@ -297,7 +298,7 @@ void collect_garbage() {
   table_remove_unmarked_object(&vm.strings);
   sweep_unreachable();
 
-#ifdef DEBUG_LOG_GC
+#ifdef DBG_LOG_GC
   printf("== end gc ==\n");
 #endif
 
