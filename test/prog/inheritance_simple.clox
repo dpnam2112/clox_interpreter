@@ -75,3 +75,32 @@ print harry.getName();
 print harry.getAge();
 print harry.getLevel();
 print harry.getMajor();
+
+print "== Test: bound method ==";
+{
+  class Foo < Person {
+    fun printInfo() {
+      var superGetName = super.getName;
+      var superGetAge = super.getAge;
+      print superGetName();
+      print superGetAge();
+    }
+  }
+
+  var foo = Foo("Foo", 17);
+  foo.printInfo();
+
+  class Bar < Person {
+
+  }
+
+  class Baz < Bar {
+    fun getName_() {
+      var superGetName = super.getName;
+      return superGetName();
+    }
+  }
+
+  var baz = Baz("Baz", 17);
+  print baz.getName_();
+}

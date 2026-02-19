@@ -13,3 +13,7 @@
 23
 'College'
 'Computer engineering'
+'== Test: bound method =='
+'Foo'
+17
+'Baz'
