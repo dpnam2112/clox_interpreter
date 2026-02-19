@@ -84,7 +84,9 @@ void free_instance_obj(InstanceObj* instance) {
 
 void free_object(Obj* object) {
 #ifdef DBG_LOG_GC
-  printf("Free object at %p, type %d\n", (void*)object, object->type);
+  printf("Free object at %p, object: ", (void*)object);
+  print_value(OBJ_VAL(*object));
+  printf("\n");
 #endif
 
   switch (object->type) {
@@ -132,10 +134,10 @@ bool mark_object(Obj* obj) {
 
 #ifdef DBG_LOG_GC
   if (!obj->gc_marked) {
-    printf("reach unmarked object: ");
+    printf("mark object: ");
     dbg_print_object(obj);
   } else {
-    printf("reach marked object: ");
+    printf("reach a marked object: ");
     dbg_print_object(obj);
   }
   printf("\n");
@@ -170,8 +172,20 @@ void mark_vm_roots() {
     mark_value(*it);
   }
 
+#ifdef DBG_LOG_GC
+  printf("Start discovering objects from global variable table\n");
+#endif
   mark_table(&vm.globals);
+
+#ifdef DBG_LOG_GC
+  printf("Marked all objects reachable global variable table\n");
+#endif
+
   mark_object(&vm.cls_init_strlit->obj);
+
+#ifdef DBG_LOG_GC
+  printf("Start discovering objects from call frames\n");
+#endif
 
   for (CallFrame* frame = vm.frames; frame < &vm.frames[vm.frame_count];
        frame++) {
@@ -181,10 +195,22 @@ void mark_vm_roots() {
     }
   }
 
+#ifdef DBG_LOG_GC
+  printf("Marked all objects reachable via call frames\n");
+#endif
+
+#ifdef DBG_LOG_GC
+  printf("Start discovering objects reachable via vm.open_upvalues\n");
+#endif
+
   for (UpvalueObj* upvalue = vm.open_upvalues; upvalue != NULL;
        upvalue = upvalue->next) {
     mark_object((Obj*)upvalue);
   }
+
+#ifdef DBG_LOG_GC
+  printf("Marked discovering objects reachable via vm.open_upvalues\n");
+#endif
 }
 
 /** Mark all reachable objects from object @obj.
@@ -192,6 +218,11 @@ void mark_vm_roots() {
  *  @obj: the starting point to search for other reachable nodes.
  * */
 void mark_reachable_objects(Obj* obj) {
+#ifdef DBG_LOG_GC
+        printf("Start discovering objects from: ");
+        dbg_print_object(obj);
+        printf("\n");
+#endif
   switch (obj->type) {
     case OBJ_CLOSURE: {
       ClosureObj* closure = (ClosureObj*)obj;
@@ -202,13 +233,6 @@ void mark_reachable_objects(Obj* obj) {
         }
 
         mark_object((Obj*)closure->upvalues[i]);
-#ifdef DBG_LOG_GC
-        printf("Marked the object: ");
-        dbg_print_object((Obj*)closure->upvalues[i]);
-        printf(", reachable from: ");
-        dbg_print_object(obj);
-        printf("\n");
-#endif
       }
       break;
     }
@@ -255,12 +279,12 @@ void mark_reachable_objects(Obj* obj) {
 void discover_all_reachable() {
   while (!gc_empty()) {
     Obj* obj = gc_pop();
+    mark_reachable_objects(obj);
 #ifdef DBG_LOG_GC
-    printf("Marking all reachable objects of: ");
+    printf("Marked all objects reachable via: ");
     dbg_print_object(obj);
     printf("\n");
 #endif
-    mark_reachable_objects(obj);
   }
 }
 
@@ -292,8 +316,22 @@ void collect_garbage() {
   printf("== begin gc ==\n");
 #endif
 
+#ifdef DBG_LOG_GC
+  printf("gc mark_vm_roots\n");
+#endif
   mark_vm_roots();
+#ifdef DBG_LOG_GC
+  printf("gc finishes mark_vm_roots\n");
+#endif
+
+#ifdef DBG_LOG_GC
+  printf("gc mark_compiler_roots\n");
+#endif
   mark_compiler_roots();
+#ifdef DBG_LOG_GC
+  printf("gc finishes mark_compiler_roots\n");
+#endif
+
   discover_all_reachable();
   table_remove_unmarked_object(&vm.strings);
   sweep_unreachable();

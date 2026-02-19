@@ -25,7 +25,7 @@ static Entry* find_entry(Entry* entries, uint32_t capacity, StringObj* key) {
   Entry* tombstone = NULL;
   uint32_t start = key->hashcode & (capacity - 1);
   uint32_t i = start;
-  for (;;) {
+  for (uint32_t count = 0; count < capacity; count++) {
     // hash table must always reserve free space (see LOAD_FACTOR)
     // so this loop should break.
     if (entries[i].key == NULL) {
