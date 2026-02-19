@@ -745,9 +745,11 @@ static InterpretResult run() {
         vm_stack_pop();
         break;
       }
-      case OP_INVOKE: {
-        Value v_method_name = READ_CONST();
-        uint8_t param_count = READ_BYTE();
+      case OP_INVOKE:
+      case OP_INVOKE_LONG: {
+        Value v_method_name =
+            (inst == OP_INVOKE) ? READ_CONST() : READ_CONST_LONG();
+        uint32_t param_count = READ_BYTE();
 
         if (!(IS_STRING_OBJ(v_method_name))) {
           panic("(OP_INVOKE) expect a string argument and a number argument.");
@@ -828,13 +830,15 @@ static InterpretResult run() {
          * and the method resolved from the superclass.
          */
 
-        Value v_super_cls = vm_stack_peek(1);
-        Value v_receiver = vm_stack_peek(0);
+        Value v_super_cls = vm_stack_peek(0);
+        Value v_receiver = vm_stack_peek(1);
         Value method_name =
             (inst == OP_GET_SUPER) ? READ_CONST() : READ_CONST_LONG();
 
-        assert(IS_CLASS_OBJ(v_super_cls) && IS_INSTANCE_OBJ(v_receiver) &&
-               IS_STRING_OBJ(method_name));
+        if (!(IS_CLASS_OBJ(v_super_cls) && IS_INSTANCE_OBJ(v_receiver) &&
+              IS_STRING_OBJ(method_name))) {
+          panic("(OP_GET_SUPER): Stack value pre-condition check failed.");
+        }
         Value v_method;
 
         if (!table_get(&AS_CLASS(v_super_cls)->methods, AS_STRING(method_name),
@@ -849,6 +853,54 @@ static InterpretResult run() {
         vm_stack_pop();
         vm_stack_pop();
         vm_stack_push(OBJ_VAL(bmethod->obj));
+        break;
+      }
+      case OP_SUPER_INVOKE:
+      case OP_SUPER_INVOKE_LONG: {
+        /* OP_SUPER_INVOKE: invoke super method.
+         *
+         * Value stack pre-condition:
+         * == Stack ==
+         * ... <subclass instance> <arg 1> <arg2> ... <arg n> <superclass>
+         * ===========
+         *
+         * Value stack's post-condition:
+         * == Stack ==
+         * ... <subclass instance> <arg 1> <arg2> ... <arg n>
+         * ===========
+         *
+         * The first slot in the method's array of local variables will point
+         * to the subclass instance.
+         */
+        Value method_name =
+            (inst == OP_SUPER_INVOKE) ? READ_CONST() : READ_CONST_LONG();
+        if (!IS_STRING_OBJ(method_name)) {
+          panic("(OP_SUPER_INVOKE) expect method_name to be a string.");
+        }
+
+        Value v_super_cls = vm_stack_pop();
+        if (!IS_CLASS_OBJ(v_super_cls)) {
+          panic("(OP_SUPER_INVOKE) expect stack top to be a class.");
+        }
+
+        // get the method from superclass
+        Value method;
+        if (!table_get(&AS_CLASS(v_super_cls)->methods, AS_STRING(method_name),
+                       &method)) {
+          runtime_error("Superclass '%s' doesn't have method '%s'.",
+                        AS_CSTRING(method_name),
+                        AS_CLOSURE(method)->function->name->chars);
+          return INTERPRET_RUNTIME_ERROR;
+        }
+
+        if (!IS_CLOSURE_OBJ(method)) {
+          panic("(OP_SUPER_INVOKE) method must be a closure.");
+        }
+
+        uint8_t param_count = READ_BYTE();
+        if (!call_value(method, param_count)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
         break;
       }
     }

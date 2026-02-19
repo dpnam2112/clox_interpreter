@@ -69,6 +69,15 @@ int invoke_instruction(const char* name, Chunk* chunk, int offset) {
   return offset + 3;
 }
 
+int invoke_long_instruction(const char* name, Chunk* chunk, int offset) {
+  uint32_t const_offset = chunk->bytecodes[offset + 1];
+  uint8_t param_count = chunk->bytecodes[offset + 4];
+  printf("%-16s (%d args) %4d ", name, param_count, const_offset);
+  print_value(chunk->constants.values[const_offset]);
+  printf("\n");
+  return offset + 5;
+}
+
 int const_long_instruction(const char* name, Chunk* chunk, int offset) {
   // offset of the constant value in chunk->values
   uint32_t const_offset = 0;
@@ -253,12 +262,18 @@ int disassemble_inst(Chunk* chunk, size_t offset) {
       return simple_instruction("OP_EXIT", offset);
     case OP_INVOKE:
       return invoke_instruction("OP_INVOKE", chunk, offset);
+    case OP_INVOKE_LONG:
+      return invoke_instruction("OP_INVOKE_LONG", chunk, offset);
     case OP_INHERIT:
       return simple_instruction("OP_INHERIT", offset);
     case OP_GET_SUPER:
       return const_instruction("OP_GET_SUPER", chunk, offset);
     case OP_GET_SUPER_LONG:
       return const_long_instruction("OP_GET_SUPER_LONG", chunk, offset);
+    case OP_SUPER_INVOKE:
+      return invoke_instruction("OP_SUPER_INVOKE", chunk, offset);
+    case OP_SUPER_INVOKE_LONG:
+      return invoke_instruction("OP_SUPER_INVOKE_LONG", chunk, offset);
     default:
       printf("Unknown opcode\n");
       return offset + 1;

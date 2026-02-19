@@ -85,12 +85,16 @@ print "== Test: bound method ==";
       print superGetName();
       print superGetAge();
     }
+
+    fun foo(a, b, c) {
+      return a + b + c;
+    }
   }
 
   var foo = Foo("Foo", 17);
   foo.printInfo();
 
-  class Bar < Person {
+  class Bar < Foo {
 
   }
 
@@ -103,4 +107,5 @@ print "== Test: bound method ==";
 
   var baz = Baz("Baz", 17);
   print baz.getName_();
+  print baz.foo(1, 2, 3);
 }

@@ -546,9 +546,6 @@ static int resolve_upvalue(Compiler* compiler, Token* name) {
 
 static void call() {
   int param_count = parameter_list();
-  if (param_count >= MAX_CALLARGS) {
-    error(&parser.prev, "Exceed argument limit.");
-  }
   emit_byte(OP_CALL);
   emit_byte(param_count);
 }
@@ -728,14 +725,27 @@ static void super_() {
   uint32_t method_name_offset =
       parse_identifier("Expect superclass method name.");
 
-  emit_get_either_local_or_upval(SYNTHETIC_TK_SUPER);
   emit_get_either_local_or_upval(SYNTHETIC_TK_THIS);
 
-  if (method_name_offset <= UINT8_MAX) {
-    emit_param_inst(OP_GET_SUPER, (uint8_t)method_name_offset, 1);
+  if (match(TK_LEFT_PAREN)) {
+    int param_count = parameter_list();
+
+    emit_get_either_local_or_upval(SYNTHETIC_TK_SUPER);
+    if (method_name_offset <= UINT8_MAX) {
+      emit_param_inst(OP_SUPER_INVOKE, (uint8_t)method_name_offset, 1);
+    } else {
+      emit_param_inst(OP_SUPER_INVOKE_LONG, method_name_offset,
+                      LONG_CONST_OFFSET_SIZE);
+    }
+    emit_byte(param_count);
   } else {
-    emit_param_inst(OP_GET_SUPER_LONG, method_name_offset,
-                    LONG_CONST_OFFSET_SIZE);
+    emit_get_either_local_or_upval(SYNTHETIC_TK_SUPER);
+    if (method_name_offset <= UINT8_MAX) {
+      emit_param_inst(OP_GET_SUPER, (uint8_t)method_name_offset, 1);
+    } else {
+      emit_param_inst(OP_GET_SUPER_LONG, method_name_offset,
+                      LONG_CONST_OFFSET_SIZE);
+    }
   }
 }
 
@@ -792,6 +802,7 @@ static void end_scope() {
   current->scope_depth--;
 }
 
+// TODO: force return type to be uint8_t.
 static int parameter_list() {
   int param_count = 0;
   if (!check(TK_RIGHT_PAREN)) {
@@ -802,6 +813,9 @@ static int parameter_list() {
   }
 
   consume(TK_RIGHT_PAREN, "Expect ')' after list of parameters.");
+  if (param_count >= MAX_CALLARGS) {
+    error(&parser.prev, "Exceed limit of number of parameters.");
+  }
   return param_count;
 }
 
@@ -818,9 +832,6 @@ static void function(FunctionType type) {
   int param_count = 0;
   if (!check(TK_RIGHT_PAREN)) {
     do {
-      if (param_count >= MAX_CALLARGS) {
-        error(&parser.prev, "Exceed limit of number of parameters.");
-      }
       uint32_t name = parse_identifier("Expect parameter's name.");
       declare_variable(parser.consumed_identifier);
       define_variable(name);
@@ -1310,9 +1321,6 @@ static void dot() {
     emit_param_inst(inst, iden_offset, iden_offset_size);
   } else if (match(TK_LEFT_PAREN)) {
     int param_count = parameter_list();
-    if (param_count >= MAX_CALLARGS) {
-      error(&parser.prev, "Exceed argument limit.");
-    }
     emit_byte(OP_INVOKE);
     emit_byte(iden_offset);
     emit_byte(param_count);
