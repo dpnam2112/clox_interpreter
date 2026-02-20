@@ -1,0 +1,58 @@
+print "== test: single continue ==";
+{
+  for (var i = 0; i < 16; i = i + 1) {
+    if (i == 0 or i == 2 or i == 4 or i == 6 or i == 8) {
+      continue;
+    }
+    print i;
+  }
+}
+
+print "== test: multiple continues ==";
+{
+  {
+    for (var i = 0; i < 16; i = i + 1) {
+      if (i == 0) {
+        continue;
+      }
+
+      if (i == 2) {
+        continue;
+      }
+
+      if (i == 4) {
+        continue;
+      }
+
+      if (i == 6) {
+        continue;
+      }
+
+      if (i == 8) {
+        continue;
+      }
+
+      if (i == 10) {
+        continue;
+      }
+      print i;
+    }
+  }
+}
+
+print "== test: for-loop without stop condition ==";
+{
+  var res = 0;
+  for (var i = 0;; i = i + 1) {
+    if (i < 1453) {
+      continue;
+    }
+
+    if (i == 1453) {
+      res = i;
+      break;
+    }
+  }
+
+  print res;
+}

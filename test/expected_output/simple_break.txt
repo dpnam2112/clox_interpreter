@@ -1,0 +1,11 @@
+'== test: simple break =='
+84
+'== test: multiple breaks =='
+25
+32
+25
+'== test: loop without for condition =='
+1453
+'== test: nested loops =='
+13
+54

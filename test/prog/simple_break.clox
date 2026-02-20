@@ -1,0 +1,108 @@
+print "== test: simple break ==";
+{
+  var f = nil;
+  for (var i = 0; i < 100; i = i + 1) {
+    if (i == 71) {
+      f = i + 13;
+      break;
+    }
+  }
+
+  print f; // 71 + 13 = 84
+}
+
+print "== test: multiple breaks ==";
+{
+  var flag = 71;
+  // this should print 25 (13 + 12)
+  for (var i = 0; i < 100; i = i + 1) {
+    if (flag == 71 and i == 13) {
+      print i + 12;
+      break;
+    }
+    
+    if (flag == 43 and i == 15) {
+      print i + 17;
+      break;
+    }
+
+    if (flag == 87 and i == 23) {
+      print i + 2;
+      break;
+    }
+  }
+
+  flag = 43;
+  // this should print 32 (15 + 17)
+  for (var i = 0; i < 100; i = i + 1) {
+    if (flag == 71 and i == 13) {
+      print i + 12;
+      break;
+    }
+    
+    if (flag == 43 and i == 15) {
+      print i + 17;
+      break;
+    }
+
+    if (flag == 87 and i == 23) {
+      print i + 2;
+      break;
+    }
+  }
+
+  flag = 87;
+  // this should print 25 (23 + 2)
+  for (var i = 0; i < 100; i = i + 1) {
+    if (flag == 71 and i == 13) {
+      print i + 12;
+      break;
+    }
+    
+    if (flag == 43 and i == 15) {
+      print i + 17;
+      break;
+    }
+
+    if (flag == 87 and i == 23) {
+      print i + 2;
+      break;
+    }
+  }
+}
+
+print "== test: loop without for condition ==";
+{
+  var res = nil;
+  for (var i = 0;; i = i + 1) {
+    if (i == 1453) {
+      res = i;
+      break;
+    }
+  }
+
+  print res;
+}
+
+print "== test: nested loops ==";
+{
+  var res0 = 0;
+  var res1 = 0;
+  for (var i = 0; true; i = i + 1) {
+    for (var j = 0; j < 100; j = j + 1) {
+      if (i + j == 67 and i == 13) {
+        res0 = i;
+        res1 = j;
+        break;
+      }
+    }
+
+    if (res0 + res1 == 67 and res0 == 13) {
+      break;
+    }
+  }
+
+  print res0; // 13
+  print res1; // 54
+}
+
