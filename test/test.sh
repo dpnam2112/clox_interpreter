@@ -19,7 +19,7 @@ clear
 echo -e "${BOLD}${CYAN}Starting clox Test Suite...${NC}\n"
 
 make clean
-make clox
+make clox EXT_FLAGS="-DDBG_VM"
 
 for source_file in test/prog/*.clox; do
     name=$(basename "$source_file" .clox)

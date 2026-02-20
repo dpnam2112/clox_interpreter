@@ -42,7 +42,7 @@ static Entry* find_entry(Entry* entries, uint32_t capacity, StringObj* key) {
       return &entries[i];
     }
 
-    i = (i + 1) % capacity;
+    i = (i + 1) & (capacity - 1);
   }
 
   return tombstone;
