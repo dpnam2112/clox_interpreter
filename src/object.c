@@ -12,7 +12,7 @@ void* allocate_object(size_t size, ObjType type) {
   obj_ref->type = type;
   obj_ref->gc_marked = false;
 
-#ifdef DEBUG_LOG_GC
+#ifdef DBG_LOG_GC
   printf("%p allocate %zu for %d\n", (void*)obj_ref, size, type);
 #endif
 
