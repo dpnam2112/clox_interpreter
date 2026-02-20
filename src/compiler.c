@@ -909,9 +909,6 @@ static void class_declaration() {
  * 2. OP_METHOD: Add a name - closure associtation to the class' method table.
  */
 static void method() {
-  if (!match(TK_FUN)) {
-    error(&parser.current, "Expect 'fun' at the start of method declaration.");
-  }
   uint32_t off = parse_identifier("Expect method name after 'fun'.");
   FunctionType ftype;
   if (parser.prev.length == 4 && memcmp(parser.prev.start, "init", 4) == 0) {

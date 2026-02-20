@@ -1,9 +1,9 @@
 class Student {
-  fun sayHello() {
+  sayHello() {
     return "Hello!";
   }
 
-  fun sayHelloTo(name) {
+  sayHelloTo(name) {
     return "Hello, " + name + "!";
   }
 }
@@ -32,7 +32,7 @@ if (harrySayHelloTo("Nam") == "Hello, Nam!") {
 }
 
 class AdderCreator {
-  fun newAdder(x) {
+  newAdder(x) {
     fun _adder(y) {
       return x + y;
     }
@@ -52,11 +52,11 @@ if(add_one(101) == 102) {
 print "test: a callable field shadows a method";
 {
   class Foo {
-    fun foo(a, b, c) {
+    foo(a, b, c) {
       return a * b * c;
     }
 
-    fun bar() {
+    bar() {
       print "bar";
     }
   }
@@ -80,7 +80,7 @@ print "test: a callable field shadows a method";
 print "test: A non-callable field shadows a method";
 {
   class Foo {
-    fun foo() {
+    foo() {
       return "foo";
     }
   }
@@ -101,7 +101,7 @@ print "test: upvalue";
     var z = 3;
 
     class Foo {
-      fun foo() {
+      foo() {
         return this.factor * (x + y + z);
       }
     }

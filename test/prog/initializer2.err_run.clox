@@ -1,6 +1,6 @@
 {
   class Foo {
-    fun init(a, b, c) {
+    init(a, b, c) {
       this.a = a;
       this.b = b;
       this.c = c;

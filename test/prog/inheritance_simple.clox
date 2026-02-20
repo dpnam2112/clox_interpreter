@@ -1,26 +1,26 @@
 print "== Test: simple inheritance ==";
 class Person {
-  fun init(name, age) {
+  init(name, age) {
     this.name = name;
     this.age = age;
   }
 
-  fun getName() {
+  getName() {
     return this.name;
   }
 
-  fun getAge() {
+  getAge() {
     return this.age;
   }
 }
 
 class Engineer < Person {
-  fun init(name, age, title) {
+  init(name, age, title) {
     super.init(name, age);
     this.title = title;
   }
 
-  fun getTitle() {
+  getTitle() {
     return this.title;
   }
 }
@@ -40,23 +40,23 @@ print "== Test: inheritance inside scope ==";
 var CollegeStudent = nil;
 {
   class Student_ < Person {
-    fun init(name, age, level) {
+    init(name, age, level) {
       super.init(name, age);
       this.level = level;
     }
 
-    fun getLevel() {
+    getLevel() {
       return this.level;
     }
   }
 
   class CollegeStudent_ < Student_ {
-    fun init(name, age, major) {
+    init(name, age, major) {
       super.init(name, age, "College");
       this.major = major;
     }
 
-    fun getMajor() {
+    getMajor() {
       return this.major;
     }
   }
@@ -79,14 +79,14 @@ print harry.getMajor();
 print "== Test: bound method ==";
 {
   class Foo < Person {
-    fun printInfo() {
+    printInfo() {
       var superGetName = super.getName;
       var superGetAge = super.getAge;
       print superGetName();
       print superGetAge();
     }
 
-    fun foo(a, b, c) {
+    foo(a, b, c) {
       return a + b + c;
     }
   }
@@ -99,7 +99,7 @@ print "== Test: bound method ==";
   }
 
   class Baz < Bar {
-    fun getName_() {
+    getName_() {
       var superGetName = super.getName;
       return superGetName();
     }

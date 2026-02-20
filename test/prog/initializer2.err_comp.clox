@@ -1,5 +1,5 @@
 class Foo {
-  fun init(x, y, z) {
+  init(x, y, z) {
     this.x = x;
     this.y = y;
     if (z < 0) {

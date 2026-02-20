@@ -1,11 +1,11 @@
 print "test: simple getter and setter";
 
 class Student {
-  fun setAge(age) {
+  setAge(age) {
     this.age = age;
   }
 
-  fun getAge(age) {
+  getAge(age) {
     return this.age;
   }
 }
@@ -20,7 +20,7 @@ if (harry.age == 17) {
 
 print "test: use of 'this' inside closure";
 class Student {
-  fun newAgeSetter() {
+  newAgeSetter() {
     fun setAge(age) {
       this.age = age;
     }
