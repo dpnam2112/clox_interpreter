@@ -1,0 +1,2 @@
+Expect 3 parameters but got 0.
+[line 10] in script
