@@ -255,6 +255,9 @@ static bool call_value(Value value, int param_count) {
 
       ClosureObj* init = AS_CLOSURE(v_init);
       CallFrame* frame = vm_call_frame_push(init, param_count);
+      if (frame == NULL) {
+        return false;
+      }
       frame->slots[0] = OBJ_VAL(*new_instance);
     } else {
       vm.stack_top[-1] = OBJ_VAL(*new_instance);
@@ -564,7 +567,6 @@ static InterpretResult run() {
         }
 
         if (!call_value(called_obj, param_count)) {
-          runtime_error("failed to call function.");
           return INTERPRET_RUNTIME_ERROR;
         }
 

@@ -6,3 +6,14 @@
 'OK'
 'test returning a closure from a method...'
 'OK'
+'test: a callable field shadows a method'
+6
+-1
+'bar'
+'rab'
+'test: A non-callable field shadows a method'
+<bound method 'Foo'.'foo'>
+1
+'test: upvalues'
+<bound method 'Foo'.'foo'>
+12

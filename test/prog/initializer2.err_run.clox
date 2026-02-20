@@ -1,0 +1,12 @@
+{
+  class Foo {
+    fun init(a, b, c) {
+      this.a = a;
+      this.b = b;
+      this.c = c;
+    }
+  }
+
+  Foo(1, 2, 3, 4); // runtime error.
+}
+

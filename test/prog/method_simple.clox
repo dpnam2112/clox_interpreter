@@ -48,3 +48,69 @@ if(add_one(101) == 102) {
 } else {
   print "Failed.";
 }
+
+print "test: a callable field shadows a method";
+{
+  class Foo {
+    fun foo(a, b, c) {
+      return a * b * c;
+    }
+
+    fun bar() {
+      print "bar";
+    }
+  }
+
+  var x = Foo();
+  print x.foo(1, 2, 3); // 6
+  fun foo(a, b, c) {
+    return a * b - c;
+  }
+  x.foo = foo;
+  print x.foo(1, 2, 3); // -1
+
+  x.bar();
+  fun bar() {
+    print "rab";
+  }
+  x.bar = bar;
+  x.bar();
+}
+
+print "test: A non-callable field shadows a method";
+{
+  class Foo {
+    fun foo() {
+      return "foo";
+    }
+  }
+
+  var a = Foo();
+  print a.foo; // should print <bound method 'Foo.foo'>
+  a.foo = 1;
+  print a.foo; // should print 1.
+}
+
+print "test: upvalue";
+{
+  var bmethod = nil; 
+  var getFactor = nil;
+  {
+    var x = 1;
+    var y = 2;
+    var z = 3;
+
+    class Foo {
+      fun foo() {
+        return this.factor * (x + y + z);
+      }
+    }
+
+    var foo0 = Foo();
+    foo0.factor = 2;
+    bmethod = foo0.foo;
+  }
+
+  print bmethod; // <bound method ...>
+  print bmethod(); // 12
+}
