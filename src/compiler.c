@@ -1395,7 +1395,9 @@ static void record_break_jmp(uint32_t jmp_position) {
   if (curloop->break_jmps.count + 1 == curloop->break_jmps.capacity) {
     int old_cap = curloop->break_jmps.capacity;
     curloop->break_jmps.capacity = GROW_CAPACITY(old_cap);
-    curloop->break_jmps.positions = GROW_ARRAY(uint32_t, curloop->break_jmps.positions, old_cap, curloop->break_jmps.capacity);
+    curloop->break_jmps.positions =
+        GROW_ARRAY(uint32_t, curloop->break_jmps.positions, old_cap,
+                   curloop->break_jmps.capacity);
   }
   curloop->break_jmps.positions[curloop->break_jmps.count++] = jmp_position;
 }
@@ -1405,7 +1407,9 @@ static void record_ctn_jmp(uint32_t jmp_position) {
   if (curloop->ctn_jmps.count + 1 == curloop->ctn_jmps.capacity) {
     int old_cap = curloop->ctn_jmps.capacity;
     curloop->ctn_jmps.capacity = GROW_CAPACITY(old_cap);
-    curloop->ctn_jmps.positions = GROW_ARRAY(uint32_t, curloop->ctn_jmps.positions, old_cap, curloop->ctn_jmps.capacity);
+    curloop->ctn_jmps.positions =
+        GROW_ARRAY(uint32_t, curloop->ctn_jmps.positions, old_cap,
+                   curloop->ctn_jmps.capacity);
   }
   curloop->ctn_jmps.positions[curloop->ctn_jmps.count++] = jmp_position;
 }

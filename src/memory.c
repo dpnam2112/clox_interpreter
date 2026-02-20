@@ -219,9 +219,9 @@ void mark_vm_roots() {
  * */
 void mark_reachable_objects(Obj* obj) {
 #ifdef DBG_LOG_GC
-        printf("Start discovering objects from: ");
-        dbg_print_object(obj);
-        printf("\n");
+  printf("Start discovering objects from: ");
+  dbg_print_object(obj);
+  printf("\n");
 #endif
   switch (obj->type) {
     case OBJ_CLOSURE: {
