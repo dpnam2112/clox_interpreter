@@ -925,10 +925,6 @@ static InterpretResult run() {
 InterpretResult interpret(const char* source) {
   ClosureObj* closure = compile(source);
 
-#ifdef DEBUG_LOG
-  printf("compiled the source code");
-#endif
-
   if (closure == NULL)
     return INTERPRET_COMPILE_ERROR;
 
