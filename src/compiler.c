@@ -23,12 +23,6 @@
 #define SYNTHETIC_TK_PLACEHOLDER \
   ((Token){.type = TK_EOF, .start = "", .length = 0, .line = 0})
 
-typedef struct IntArr {
-  int* head;
-  int size;
-  int capacity;
-} IntArr;
-
 typedef struct Parser {
   Token prev;                 // Token previously consumed.
   Token current;              // Current token that isn't consumed yet
@@ -36,11 +30,6 @@ typedef struct Parser {
   bool error;                 // was there any parse error occured?
   bool panic;                 // should the parser enter panic mode?
   Precedence prev_prec;
-
-  // These fields are used to store positions of each
-  // jump statement (breaks and continues).
-  IntArr* breaks;
-  IntArr* continues;
 } Parser;
 
 typedef struct Local {
@@ -55,6 +44,26 @@ typedef enum FunctionType {
   TYPE_METHOD,
   TYPE_INITIALIZER,
 } FunctionType;
+
+typedef struct Loop {
+  struct Loop* enclosing;
+
+  // for recording 'break' jumps.
+  // each entry is a position of a 'break' jump.
+  struct {
+    uint32_t* positions;
+    int count;
+    int capacity;
+  } break_jmps;
+
+  // for recording 'continue' jumps, similar to
+  // @break_jmps.
+  struct {
+    uint32_t* positions;
+    int count;
+    int capacity;
+  } ctn_jmps;
+} Loop;
 
 /** Upvalue: used to resolve variables that lie outside
  * of the current function's scope.
@@ -87,6 +96,7 @@ typedef struct Compiler {
   int scope_depth;
   Upvalue upvalues[MAX_UPVALUE];
   int upval_count;
+  Loop* loops;
 } Compiler;
 
 /* ClassCompiler: track the information of the current class
@@ -113,7 +123,10 @@ typedef struct ParseRule {
   Precedence prec;
 } ParseRule;
 
-// Function declarations
+static void compiler_enter_loop(Loop* newloop);
+static void compiler_exit_loop();
+static void record_break_jmp(uint32_t position);
+static void record_ctn_jmp(uint32_t position);
 static void dot();
 static void unary();
 static void binary();
@@ -209,17 +222,6 @@ bool mark_compiler_roots() {
   return true;
 }
 
-static void int_arr_init(IntArr* arr) {
-  arr->head = ALLOCATE(int, 10);
-  arr->size = 0;
-  arr->capacity = 10;
-}
-
-static void int_arr_free(IntArr* arr) {
-  FREE_ARRAY(int, arr->head, arr->capacity);
-  arr->capacity = arr->size = 0;
-}
-
 static void emit_error_msg(Token* tk_error, const char* msg) {
   if (parser.panic)
     return;
@@ -238,15 +240,6 @@ static void emit_error_msg(Token* tk_error, const char* msg) {
 static void error(Token* tk_error, const char* msg) {
   parser.error = true;
   emit_error_msg(tk_error, msg);
-}
-
-static void int_arr_append(IntArr* arr, int item) {
-  if (arr->size + 1 == arr->capacity) {
-    int old_cap = arr->capacity;
-    arr->capacity = GROW_CAPACITY(old_cap);
-    arr->head = GROW_ARRAY(int, arr->head, old_cap, arr->capacity);
-  }
-  arr->head[arr->size++] = item;
 }
 
 static void add_local(Token name) {
@@ -297,6 +290,7 @@ static void compiler_init(Compiler* compiler, FunctionType type) {
         parser.consumed_identifier.start, parser.consumed_identifier.length);
   }
   compiler->upval_count = 0;
+  compiler->loops = NULL;
   current = compiler;
 
   // reserve the first slot for VM's internal use
@@ -311,19 +305,9 @@ void parser_init() {
   parser.error = false;
   parser.panic = false;
   parser.prev_prec = PREC_NONE;
-  parser.breaks = NULL;
-  parser.continues = NULL;
 }
 
 void parser_free() {}
-
-static void add_break(uint32_t jmp_param) {
-  int_arr_append(parser.breaks, jmp_param);
-}
-
-static void add_continue(uint32_t jmp_param) {
-  int_arr_append(parser.continues, jmp_param);
-}
 
 static Chunk* current_chunk() {
   return &current->function->chunk;
@@ -1016,7 +1000,7 @@ static void block_stmt() {
 }
 
 static void break_stmt() {
-  if (parser.breaks == NULL) {
+  if (current->loops == NULL) {
     // parser is not inside of a loop
     error(&parser.prev, "use of 'break' outside loop.");
     consume(TK_SEMICOLON, "Expect ';' after 'break'.");
@@ -1024,43 +1008,44 @@ static void break_stmt() {
   }
 
   uint32_t brk = emit_jump(OP_JMP);
-  add_break(brk);
+  record_break_jmp(brk);
   consume(TK_SEMICOLON, "Expect ';' after 'break'.");
 }
 
 static void patch_break() {
-  if (parser.breaks == NULL)
+  Loop* curloop = current->loops;
+  if (curloop == NULL) {
     return;
-  for (int i = 0; i < parser.breaks->size; i++)
-    patch_jump(parser.breaks->head[i]);
+  }
+
+  for (int i = 0; i < curloop->break_jmps.count; i++)
+    patch_jump(curloop->break_jmps.positions[i]);
 }
 
 static void patch_continue() {
-  if (parser.continues == NULL)
+  Loop* curloop = current->loops;
+  if (curloop == NULL) {
     return;
-  for (int i = 0; i < parser.continues->size; i++)
-    patch_jump(parser.continues->head[i]);
+  }
+
+  for (int i = 0; i < curloop->ctn_jmps.count; i++)
+    patch_jump(curloop->ctn_jmps.positions[i]);
 }
 
 static void continue_stmt() {
-  if (parser.continues == NULL)
+  if (current->loops == NULL)
     error(&parser.prev, "use of 'continue' outside loop.");
   else {
     uint32_t jmp_param = emit_jump(OP_JMP);
-    add_continue(jmp_param);
+    record_ctn_jmp(jmp_param);
   }
 
   consume(TK_SEMICOLON, "Expect ';' after 'continue'.");
 }
 
 static void while_stmt() {
-  IntArr* outer_loop_brk = parser.breaks;
-  IntArr* outer_loop_continue = parser.continues;
-  IntArr current_loop_brk, current_loop_continue;
-  int_arr_init(&current_loop_brk);
-  int_arr_init(&current_loop_continue);
-  parser.breaks = &current_loop_brk;
-  parser.continues = &current_loop_continue;
+  Loop loop;
+  compiler_enter_loop(&loop);
 
   // condition expression
   consume(TK_LEFT_PAREN, "Expect '(' after 'while'.");
@@ -1080,24 +1065,16 @@ static void while_stmt() {
   patch_continue();
   emit_loop(condition_pos);
   patch_jump(out_of_loop_jmp);
-  patch_break();
   emit_byte(OP_POP);
+  patch_break();
 
-  parser.breaks = outer_loop_brk;
-  parser.continues = outer_loop_continue;
-  int_arr_free(&current_loop_brk);
-  int_arr_free(&current_loop_continue);
+  compiler_exit_loop();
 }
 
 // Desugar for-loop to while-loop
 static void for_stmt() {
-  IntArr* outer_loop_brk = parser.breaks;
-  IntArr* outer_loop_continue = parser.continues;
-  IntArr current_loop_brk, current_loop_continue;
-  int_arr_init(&current_loop_brk);
-  int_arr_init(&current_loop_continue);
-  parser.breaks = &current_loop_brk;
-  parser.continues = &current_loop_continue;
+  Loop loop;
+  compiler_enter_loop(&loop);
 
   // flow of a for-loop: initialization -> check condition -> execute body
   // -> increment -> jump back to checking condition
@@ -1149,10 +1126,7 @@ static void for_stmt() {
   patch_break();
   end_scope();
 
-  parser.breaks = outer_loop_brk;
-  parser.continues = outer_loop_continue;
-  int_arr_free(&current_loop_brk);
-  int_arr_free(&current_loop_continue);
+  compiler_exit_loop();
 }
 
 static void return_stmt() {
@@ -1387,4 +1361,51 @@ static void emit_implicit_ret() {
       break;
   }
   emit_byte(OP_RETURN);
+}
+
+static void compiler_enter_loop(Loop* loop) {
+  loop->break_jmps.positions = ALLOCATE(uint32_t, 32);
+  loop->break_jmps.count = 0;
+  loop->break_jmps.capacity = 32;
+
+  loop->ctn_jmps.positions = ALLOCATE(uint32_t, 32);
+  loop->ctn_jmps.count = 0;
+  loop->ctn_jmps.capacity = 32;
+
+  loop->enclosing = current->loops;
+  current->loops = loop;
+}
+
+static void compiler_exit_loop() {
+  Loop* curloop = current->loops;
+
+  FREE_ARRAY(Loop, curloop->break_jmps.positions, curloop->break_jmps.capacity);
+  curloop->break_jmps.capacity = 0;
+  curloop->break_jmps.count = 0;
+
+  FREE_ARRAY(Loop, curloop->ctn_jmps.positions, curloop->ctn_jmps.capacity);
+  curloop->ctn_jmps.capacity = 0;
+  curloop->ctn_jmps.count = 0;
+
+  current->loops = curloop->enclosing;
+}
+
+static void record_break_jmp(uint32_t jmp_position) {
+  Loop* curloop = current->loops;
+  if (curloop->break_jmps.count + 1 == curloop->break_jmps.capacity) {
+    int old_cap = curloop->break_jmps.capacity;
+    curloop->break_jmps.capacity = GROW_CAPACITY(old_cap);
+    curloop->break_jmps.positions = GROW_ARRAY(uint32_t, curloop->break_jmps.positions, old_cap, curloop->break_jmps.capacity);
+  }
+  curloop->break_jmps.positions[curloop->break_jmps.count++] = jmp_position;
+}
+
+static void record_ctn_jmp(uint32_t jmp_position) {
+  Loop* curloop = current->loops;
+  if (curloop->ctn_jmps.count + 1 == curloop->ctn_jmps.capacity) {
+    int old_cap = curloop->ctn_jmps.capacity;
+    curloop->ctn_jmps.capacity = GROW_CAPACITY(old_cap);
+    curloop->ctn_jmps.positions = GROW_ARRAY(uint32_t, curloop->ctn_jmps.positions, old_cap, curloop->ctn_jmps.capacity);
+  }
+  curloop->ctn_jmps.positions[curloop->ctn_jmps.count++] = jmp_position;
 }
