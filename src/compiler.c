@@ -1145,8 +1145,8 @@ static void for_stmt() {
   emit_loop(increment_start);  // jump back to increment expression if the body
                                // is executed
   patch_jump(exit_loop);       // the body is parsed, patch the exit-loop jump
-  patch_break();
   emit_byte(OP_POP);  // discard the condition's value if we are out of loop
+  patch_break();
   end_scope();
 
   parser.breaks = outer_loop_brk;
