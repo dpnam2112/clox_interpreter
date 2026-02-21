@@ -65,7 +65,7 @@ typedef struct Loop {
   } ctn_jmps;
 } Loop;
 
-/** Upvalue: used to resolve variables that lie outside
+/* Upvalue: used to resolve variables that lie outside
  * of the current function's scope.
  *
  * @index: index of the variable in the enclosing function's stack array
@@ -82,7 +82,7 @@ typedef struct Upvalue {
   bool long_offset;
 } Upvalue;
 
-/** Compiler: stores states during the compilation process
+/* Compiler: stores states during the compilation process
  * of a function or the global script, which also can be
  * considered as a function. it mimicks the VM's behavior
  * during runtime.

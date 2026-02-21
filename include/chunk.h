@@ -11,16 +11,15 @@
  * instructions.
  */
 
-#define LONG_LOCAL_OFFSET_SIZE 3
-#define LONG_UPVAL_OFFSET_SIZE 2
+#define LONG_LOCAL_OFFSET_SIZE 4  // in bytes
+#define LONG_UPVAL_OFFSET_SIZE 2  // in bytes
 
-#define LONG_CONST_OFFSET_SIZE 3
-#define CHUNK_CONST_POOL_MAX (1 << 8 * LONG_CONST_OFFSET_SIZE)
-
+#define LONG_CONST_OFFSET_SIZE 4  // in bytes
+#define CHUNK_CONST_POOL_MAX UINT32_MAX
 #define CHUNK_CONST_POOL_EFULL UINT32_MAX
 
 _Static_assert(
-    CHUNK_CONST_POOL_MAX < CHUNK_CONST_POOL_EFULL,
+    CHUNK_CONST_POOL_MAX <= CHUNK_CONST_POOL_EFULL,
     "Chunk's constant pool limit must be less than CHUNK_CONST_POOL_EFULL, "
     "which is reserved for error returned when the pool is full.");
 
