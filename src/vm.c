@@ -421,8 +421,8 @@ static InterpretResult run() {
         break;
       }
       case OP_NEGATE: {
-        if (vm_stack_peek(0).type != VAL_NUMBER) {
-          runtime_error("Cannot negate an object that is not numeric");
+        if (!IS_NUMBER(vm_stack_peek(0))) {
+          runtime_error("Cannot negate a non-numeric value.");
           return INTERPRET_RUNTIME_ERROR;
         }
 
@@ -441,16 +441,15 @@ static InterpretResult run() {
         Value right = vm_stack_peek(0);
         Value result;
 
-        bool are_nums = right.type == VAL_NUMBER && left.type == VAL_NUMBER;
-        bool are_strs =
-            OBJ_TYPE(right) == OBJ_STRING && OBJ_TYPE(left) == OBJ_STRING;
+        bool are_nums = IS_NUMBER(left) && IS_NUMBER(right);
+        bool are_strs = IS_STRING_OBJ(left) && IS_STRING_OBJ(right);
 
         if (!(are_nums || are_strs)) {
           runtime_error("Both operands must be either strings or numbers");
           return INTERPRET_RUNTIME_ERROR;
         }
 
-        if (right.type == VAL_NUMBER) {
+        if (are_nums) {
           result = NUMBER_VAL(AS_NUMBER(left) + AS_NUMBER(right));
         } else {
           result = concatenate(left, right);

@@ -1,0 +1,33 @@
+'== test: number comparison =='
+false
+true
+true
+false
+true
+true
+true
+true
+false
+'== test: boolean comparison =='
+true
+false
+true
+false
+true
+'== test: compare two functions =='
+false
+true
+true
+true
+false
+'== test: compare two classes =='
+true
+false
+true
+true
+false
+'== test: compare two class instances =='
+false
+false
+false
+true

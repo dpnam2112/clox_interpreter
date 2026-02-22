@@ -1,0 +1,74 @@
+print "== test: number comparison ==";
+print 1 > 2; // false
+print 2 < 3; // true
+print 4223.12 < 4223.121; // true
+print 4223.12 == 4223.121; // false
+print 1 == 1; // true
+print 1 <= 1; // true
+print 2 <= 3; // true
+print 23 * 12 + 4581 <= 6000; // true
+print 23 * 12 + 4581 < 1500 * 2; // false
+
+print "== test: boolean comparison ==";
+print true == true; // true
+print true == false; // false
+print false == false; // true
+print false != false; // false
+print false != true; // true
+
+print "== test: compare two functions ==";
+
+{
+  fun f(a, b, c, d) {
+    return 1;
+  }
+
+  fun g(e, f) {
+    return 1;
+  }
+
+  print f == g; // false
+  print f(nil, nil, 1, 1) == g(1, 2); // true
+
+  var g_ = g;
+  print g == g_; // true
+
+  var f_ = f;
+  print f_ == f; // true
+
+  print g_ == f_; // false
+}
+
+print "== test: compare two classes ==";
+{
+  class Foo {
+    f() {
+
+    }
+  }
+
+  class Bar {
+    g() {
+
+    }
+  }
+
+  print Foo == Foo; // true
+  print Foo == Bar; // false
+
+  var Foo_ = Foo;
+  print Foo_ == Foo; // true
+
+  var Bar_ = Bar;
+  print Bar_ == Bar; // true
+  print Bar_ == Foo_; // false
+
+  print "== test: compare two class instances ==";
+  print Foo() == Foo(); // false
+  print Foo() == Bar(); // false
+  print Bar() == Bar(); // false
+
+  var foo1 = Foo();
+  var foo2 = foo1;
+  print foo1 == foo2; // true
+}

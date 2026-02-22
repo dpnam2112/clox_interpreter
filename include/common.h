@@ -10,5 +10,7 @@
 // #define DBG_DISASSEMBLE
 // #define DBG_STRESS_GC
 // #define DBG_LOG_GC
+// #define DBG_VM
+// #define NAN_BOXING
 
 #endif
