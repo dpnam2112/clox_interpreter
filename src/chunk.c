@@ -72,26 +72,6 @@ void chunk_append(Chunk* chunk, uint8_t byte, uint16_t line) {
   chunk->size++;
 }
 
-int get_inst_size(Opcode type) {
-  switch (type) {
-    case OP_CONST:
-      return 2;
-    case OP_JMP:
-    case OP_JMP_IF_FALSE:
-    case OP_LOOP:
-      return 3;
-    case OP_GET_LOCAL:
-    case OP_SET_LOCAL:
-    case OP_DEFINE_GLOBAL:
-    case OP_GET_GLOBAL:
-    case OP_SET_GLOBAL:
-    case OP_CONST_LONG:
-      return 4;
-    default:
-      return 1;
-  }
-}
-
 uint16_t chunk_get_line(Chunk* chunk, uint32_t index) {
   BytecodeLine* iter = chunk->line_tracker;
   for (; iter != NULL; iter = iter->next) {
