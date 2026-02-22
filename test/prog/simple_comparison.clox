@@ -9,6 +9,10 @@ print 2 <= 3; // true
 print 23 * 12 + 4581 <= 6000; // true
 print 23 * 12 + 4581 < 1500 * 2; // false
 
+print "== test: compare NaN ==";
+print 0 / 0 == 0 / 0; // false
+print 0 / 0 == false; // false
+
 print "== test: boolean comparison ==";
 print true == true; // true
 print true == false; // false
