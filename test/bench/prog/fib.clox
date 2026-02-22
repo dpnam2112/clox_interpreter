@@ -3,11 +3,31 @@ fun fib(n) {
     return n;
   }
 
-  return fib(n - 1) + fib(n - 2);
+  var prev = 0;
+  var cur = 1;
+
+  for (var i = 2; i <= n; i = i + 1) {
+    var temp = cur;
+    cur = cur + prev;
+    prev = temp;
+  }
+
+  return cur;
 }
 
-print fib(10);
-print fib(15);
-print fib(21);
-print fib(27);
-print fib(32);
+var start = clock();
+
+{
+  var i = 0;
+  var n = 120;
+  var final = nil;
+  for (var c = 0; c < 100000000; c = c + 1) {
+    for (; i <= n; i = i + 1) {
+      final = fib(i);
+    }
+  }
+  print final;
+}
+
+var respTime = clock() - start;
+print respTime;
