@@ -7,7 +7,8 @@
 bool value_equal(Value val_1, Value val_2) {
 #ifdef NAN_BOXING
   if (IS_NUMBER(val_1) && IS_NUMBER(val_2)) {
-    // A NaN **can** be a valid double. e.g. 0 / 0 == 0 / 0 -> this should return true.
+    // A NaN **can** be a valid double. e.g. 0 / 0 == 0 / 0 -> this should
+    // return true.
     return AS_NUMBER(val_1) == AS_NUMBER(val_2);
   }
 
@@ -94,10 +95,10 @@ void print_value(Value val) {
 void print_object(Obj* obj) {
   switch (obj->type) {
     case OBJ_STRING:
-      printf("'%s'", ((StringObj*) obj)->chars);
+      printf("'%s'", ((StringObj*)obj)->chars);
       break;
     case OBJ_FUNCTION: {
-      FunctionObj* func = (FunctionObj*) obj;
+      FunctionObj* func = (FunctionObj*)obj;
       if (func->name == NULL)
         printf("<script>");
       else if (strcmp(func->name->chars, "") != 0)
@@ -113,24 +114,24 @@ void print_object(Obj* obj) {
       printf("<native function>");
       break;
     case OBJ_CLOSURE: {
-      ClosureObj* closure = (ClosureObj*) obj;
+      ClosureObj* closure = (ClosureObj*)obj;
       StringObj* closure_name = closure->function->name;
       printf("<closure '%s'>",
              (closure_name == NULL) ? "" : closure_name->chars);
       break;
     }
     case OBJ_CLASS: {
-      ClassObj* klass = (ClassObj*) obj;
+      ClassObj* klass = (ClassObj*)obj;
       printf("<class '%s'>", klass->name->chars);
       break;
     }
     case OBJ_INSTANCE: {
-      InstanceObj* instance = (InstanceObj*) obj;
+      InstanceObj* instance = (InstanceObj*)obj;
       printf("<%s instance>", instance->klass->name->chars);
       break;
     }
     case OBJ_BOUND_METHOD: {
-      BoundMethodObj* bmethod = (BoundMethodObj*) obj;
+      BoundMethodObj* bmethod = (BoundMethodObj*)obj;
       StringObj* fun_name = bmethod->method->function->name;
       ClassObj* klass = AS_INSTANCE(bmethod->receiver)->klass;
       printf("<bound method '%s'.'%s'>", klass->name->chars, fun_name->chars);

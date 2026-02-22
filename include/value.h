@@ -37,13 +37,13 @@ typedef struct Obj Obj;
 #define IEEE754_NAN_MASK (UINT64_C(0x7ff) << 52)
 
 /* Quiet bit of IEEE-754 floating-point.
- * 
+ *
  * CPUs should not raise any faults/traps when it encounters any
  * NaN having this bit set.
  */
 #define IEEE754_QBIT (UINT64_C(1) << 51)
 
-/* IEEE-754's sign bit indicates whether a float is negative. 
+/* IEEE-754's sign bit indicates whether a float is negative.
  *
  * But here we use it to represent Obj pointer. If this bit
  * is set, we should treat Value as an object.
@@ -53,9 +53,9 @@ typedef struct Obj Obj;
 #define QNAN (IEEE754_NAN_MASK | IEEE754_QBIT | INTEL_FP_INDEF)
 
 /* Use the second bit to distinguish boolean and nil */
-#define TAG_NIL   0x01
-#define TAG_BOOL  0x10
-#define TAG_OBJ   IEEE754_SIGN_BIT
+#define TAG_NIL 0x01
+#define TAG_BOOL 0x10
+#define TAG_OBJ IEEE754_SIGN_BIT
 
 typedef uint64_t Value;
 
@@ -74,22 +74,23 @@ static inline double val_to_num(Value val) {
 }
 
 /* Value cast */
-#define AS_BOOL(value) (BITMASK_EQ(value, QNAN | TAG_BOOL | true) ? true : false)
+#define AS_BOOL(value) \
+  (BITMASK_EQ(value, QNAN | TAG_BOOL | true) ? true : false)
 #define AS_NUMBER(value) val_to_num(value)
-#define AS_OBJ(value) ((Obj*) (((uintptr_t) value) & ~(TAG_OBJ | QNAN)))
+#define AS_OBJ(value) ((Obj*)(((uintptr_t)value) & ~(TAG_OBJ | QNAN)))
 
 /* Value initializers */
-#define NIL_VAL() ((Value) (QNAN | TAG_NIL))
+#define NIL_VAL() ((Value)(QNAN | TAG_NIL))
 #define BOOL_VAL(b) (QNAN | TAG_BOOL | (b ? true : false))
 #define NUMBER_VAL(num) num_to_val(num)
-#define OBJ_VAL(object) (Value) ((TAG_OBJ | QNAN | (uintptr_t) &object))
+#define OBJ_VAL(object) (Value)((TAG_OBJ | QNAN | (uintptr_t) & object))
 
 /* type checkers */
 // not a quiet NaN -> value should be treated as a normal double.
-#define IS_NUMBER(value) (!BITMASK_EQ(value, QNAN)) 
+#define IS_NUMBER(value) (!BITMASK_EQ(value, QNAN))
 #define IS_NIL(value) (value == NIL_VAL())
-#define IS_BOOL(value) ((!BITMASK_EQ(value, TAG_OBJ)) \
-                        && BITMASK_EQ(value, TAG_BOOL | QNAN))
+#define IS_BOOL(value) \
+  ((!BITMASK_EQ(value, TAG_OBJ)) && BITMASK_EQ(value, TAG_BOOL | QNAN))
 #define IS_OBJ(value) BITMASK_EQ(value, TAG_OBJ | QNAN)
 
 #else
@@ -140,7 +141,7 @@ typedef struct {
 #define IS_BOOL(value) (((Value)(value)).type == VAL_BOOL)
 #define IS_OBJ(value) (((Value)(value)).type == VAL_OBJ)
 
-#endif // #if NAN_BOXING
+#endif  // #if NAN_BOXING
 
 /* Limits */
 #define MAX_UPVALUE 256

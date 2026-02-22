@@ -35,5 +35,6 @@ int main() {
   printf("%f\n", num);
   printf("is obj: %d\n", IS_OBJ(OBJ_VAL(str)));
   printf("is bool: %d\n", IS_BOOL(OBJ_VAL(str)));
-  printf("check casting: %s\n", AS_OBJ(OBJ_VAL(str)) == &str->obj ? "OK" : "Failed");
+  printf("check casting: %s\n",
+         AS_OBJ(OBJ_VAL(str)) == &str->obj ? "OK" : "Failed");
 }
