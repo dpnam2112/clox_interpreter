@@ -1,0 +1,35 @@
+'== test: simple boolean expressions =='
+true
+false
+false
+false
+true
+true
+true
+true
+true
+false
+true
+true
+false
+false
+true
+true
+true
+true
+true
+'== test: truthy and falsey =='
+nil
+nil
+nil
+true
+123
+true
+false
+1
+365.12
+143
+false
+'jkl'
+'abc'
+'abcdef'

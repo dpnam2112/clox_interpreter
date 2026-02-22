@@ -20,7 +20,7 @@ void table_free(Table* table) {
  * return value: reference to the entry that either is empty or contains
  * the given key @key
  * @capacity: number of slots in @entries
- * */
+ */
 static Entry* find_entry(Entry* entries, uint32_t capacity, StringObj* key) {
   Entry* tombstone = NULL;
   uint32_t start = key->hashcode & (capacity - 1);
@@ -42,7 +42,7 @@ static Entry* find_entry(Entry* entries, uint32_t capacity, StringObj* key) {
       return &entries[i];
     }
 
-    i = (i + 1) % capacity;
+    i = (i + 1) & (capacity - 1);
   }
 
   return tombstone;

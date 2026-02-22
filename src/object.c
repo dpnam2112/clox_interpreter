@@ -163,3 +163,14 @@ BoundMethodObj* BoundMethodObj_construct(Value receiver, ClosureObj* method) {
   bmethod->method = method;
   return bmethod;
 }
+
+bool object_equal(Obj* obj1, Obj* obj2) {
+  if (obj1->type == OBJ_STRING && obj2->type == OBJ_STRING) {
+    StringObj* str_1 = (StringObj*)obj1;
+    StringObj* str_2 = (StringObj*)obj2;
+    return str_1->length == str_2->length &&
+           strcmp(str_1->chars, str_2->chars) == 0;
+  }
+
+  return obj1 == obj2;
+}

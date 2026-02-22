@@ -15,6 +15,9 @@
   do {                                                                     \
     while (chunk->size + n > chunk->capacity) {                            \
       uint32_t new_cap = GROW_CAPACITY(chunk->capacity);                   \
+      if (new_cap > CHUNK_CONST_POOL_MAX) {                                \
+        new_cap = CHUNK_CONST_POOL_MAX;                                    \
+      }                                                                    \
       chunk->bytecodes =                                                   \
           GROW_ARRAY(uint8_t, chunk->bytecodes, chunk->capacity, new_cap); \
       chunk->capacity = new_cap;                                           \
@@ -45,10 +48,10 @@ void chunk_free(Chunk* chunk) {
   }
 }
 
-/** Add information to track line numbers of bytecodes
- *  @bytecode_pos: position of the bytecode
- *  @line: line number associated to the bytecode at @bytecode_pos
- **/
+/* Add information to track line numbers of bytecodes
+ * @bytecode_pos: position of the bytecode
+ * @line: line number associated to the bytecode at @bytecode_pos
+ */
 void add_line_metadata(Chunk* chunk, uint32_t bytecode_pos, uint32_t line) {
   if (line == chunk->current_line && chunk->line_tracker != NULL) {
     return;

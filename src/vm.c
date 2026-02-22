@@ -178,6 +178,8 @@ static void runtime_error(const char* format, ...) {
   call_frame_reset();
 }
 
+#ifdef DBG_VM
+
 /** panic: for internal runtime errors that cannot be recovered.
  * stop the runtime immediately.
  * TODO: implement placeholder for graceful shutdown.
@@ -191,6 +193,15 @@ static void panic(const char* format, ...) {
   fputs("\n", stderr);
   exit(-1);
 }
+
+#define VM_ASSERT(condition, message, ...) \
+  if (!(condition))                        \
+    if (!(condition)) {                    \
+      panic(message, ##__VA_ARGS__);       \
+    }
+#else
+#define VM_ASSERT(condition, message, ...)
+#endif
 
 /** read n bytes from a chunk
  * @param byte_count: number of bytes which represents the offset
@@ -227,10 +238,6 @@ static CallFrame* vm_call_frame_push(ClosureObj* closure, int param_count) {
 }
 
 static bool call_value(Value value, int param_count) {
-  if (!callable(value)) {
-    return false;
-  }
-
   // Check if the frame stack is overflow
   if (vm.frame_count >= CALL_FRAME_MAX) {
     runtime_error("Stack overflow.");
@@ -249,9 +256,7 @@ static bool call_value(Value value, int param_count) {
     Value v_init;
 
     if (table_get(&class_obj->methods, vm.cls_init_strlit, &v_init)) {
-      if (!IS_CLOSURE_OBJ(v_init)) {
-        panic("initalizer is not a closure.");
-      }
+      VM_ASSERT(IS_CLOSURE_OBJ(v_init), "initalizer is not a closure.");
 
       ClosureObj* init = AS_CLOSURE(v_init);
       CallFrame* frame = vm_call_frame_push(init, param_count);
@@ -416,8 +421,8 @@ static InterpretResult run() {
         break;
       }
       case OP_NEGATE: {
-        if (vm_stack_peek(0).type != VAL_NUMBER) {
-          runtime_error("Cannot negate an object that is not numeric");
+        if (!IS_NUMBER(vm_stack_peek(0))) {
+          runtime_error("Cannot negate a non-numeric value.");
           return INTERPRET_RUNTIME_ERROR;
         }
 
@@ -436,16 +441,15 @@ static InterpretResult run() {
         Value right = vm_stack_peek(0);
         Value result;
 
-        bool are_nums = right.type == VAL_NUMBER && left.type == VAL_NUMBER;
-        bool are_strs =
-            OBJ_TYPE(right) == OBJ_STRING && OBJ_TYPE(left) == OBJ_STRING;
+        bool are_nums = IS_NUMBER(left) && IS_NUMBER(right);
+        bool are_strs = IS_STRING_OBJ(left) && IS_STRING_OBJ(right);
 
         if (!(are_nums || are_strs)) {
           runtime_error("Both operands must be either strings or numbers");
           return INTERPRET_RUNTIME_ERROR;
         }
 
-        if (right.type == VAL_NUMBER) {
+        if (are_nums) {
           result = NUMBER_VAL(AS_NUMBER(left) + AS_NUMBER(right));
         } else {
           result = concatenate(left, right);
@@ -736,11 +740,11 @@ static InterpretResult run() {
 
         Value method_name_val =
             (inst == OP_METHOD) ? READ_CONST() : READ_CONST_LONG();
-        if (!(IS_CLASS_OBJ(vm_stack_peek(1)) &&
-              IS_CLOSURE_OBJ(vm_stack_peek(0)) &&
-              IS_STRING_OBJ(method_name_val))) {
-          panic("OP_METHOD's pre-condition check fails.");
-        }
+
+        VM_ASSERT((IS_CLASS_OBJ(vm_stack_peek(1)) &&
+                   IS_CLOSURE_OBJ(vm_stack_peek(0)) &&
+                   IS_STRING_OBJ(method_name_val)),
+                  "OP_METHOD's pre-condition check fails.");
 
         StringObj* method_name = AS_STRING(method_name_val);
         ClassObj* klass = AS_CLASS(vm_stack_peek(1));
@@ -756,9 +760,9 @@ static InterpretResult run() {
             (inst == OP_INVOKE) ? READ_CONST() : READ_CONST_LONG();
         uint32_t param_count = READ_BYTE();
 
-        if (!(IS_STRING_OBJ(v_method_name))) {
-          panic("(OP_INVOKE) expect a string argument and a number argument.");
-        }
+        VM_ASSERT(
+            IS_STRING_OBJ(v_method_name),
+            "(OP_INVOKE) expect a string argument and a number argument.");
 
         StringObj* method_name = AS_STRING(v_method_name);
 
@@ -786,9 +790,8 @@ static InterpretResult run() {
             return INTERPRET_RUNTIME_ERROR;
           }
 
-          if (!IS_CLOSURE_OBJ(callable_val)) {
-            panic("'method' must be a closure.");
-          }
+          VM_ASSERT(IS_CLOSURE_OBJ(callable_val),
+                    "'method' must be a closure.");
         }
 
         if (!call_value(callable_val, param_count)) {
@@ -814,9 +817,7 @@ static InterpretResult run() {
         Value v_supercls = vm_stack_peek(1);
         Value v_subcls = vm_stack_peek(0);
 
-        if (!IS_CLASS_OBJ(v_subcls)) {
-          panic("OP_INHERIT");
-        }
+        VM_ASSERT(IS_CLASS_OBJ(v_subcls), "OP_INHERIT");
 
         if (!IS_CLASS_OBJ(v_supercls)) {
           runtime_error("Superclass must be a class.");
@@ -844,10 +845,9 @@ static InterpretResult run() {
         Value method_name =
             (inst == OP_GET_SUPER) ? READ_CONST() : READ_CONST_LONG();
 
-        if (!(IS_CLASS_OBJ(v_super_cls) && IS_INSTANCE_OBJ(v_receiver) &&
-              IS_STRING_OBJ(method_name))) {
-          panic("(OP_GET_SUPER): Stack value pre-condition check failed.");
-        }
+        VM_ASSERT((IS_CLASS_OBJ(v_super_cls) && IS_INSTANCE_OBJ(v_receiver) &&
+                   IS_STRING_OBJ(method_name)),
+                  "(OP_GET_SUPER): Stack value pre-condition check failed.");
         Value v_method;
 
         if (!table_get(&AS_CLASS(v_super_cls)->methods, AS_STRING(method_name),
@@ -883,14 +883,13 @@ static InterpretResult run() {
          */
         Value method_name =
             (inst == OP_SUPER_INVOKE) ? READ_CONST() : READ_CONST_LONG();
-        if (!IS_STRING_OBJ(method_name)) {
-          panic("(OP_SUPER_INVOKE) expect method_name to be a string.");
-        }
+
+        VM_ASSERT(IS_STRING_OBJ(method_name),
+                  "(OP_SUPER_INVOKE) expect method_name to be a string.");
 
         Value v_super_cls = vm_stack_pop();
-        if (!IS_CLASS_OBJ(v_super_cls)) {
-          panic("(OP_SUPER_INVOKE) expect stack top to be a class.");
-        }
+        VM_ASSERT(IS_CLASS_OBJ(v_super_cls),
+                  "(OP_SUPER_INVOKE) expect stack top to be a class.");
 
         // get the method from superclass
         Value method;
@@ -902,9 +901,8 @@ static InterpretResult run() {
           return INTERPRET_RUNTIME_ERROR;
         }
 
-        if (!IS_CLOSURE_OBJ(method)) {
-          panic("(OP_SUPER_INVOKE) method must be a closure.");
-        }
+        VM_ASSERT(IS_CLOSURE_OBJ(method),
+                  "(OP_SUPER_INVOKE) method must be a closure.");
 
         uint8_t param_count = READ_BYTE();
         if (!call_value(method, param_count)) {

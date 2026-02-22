@@ -13,7 +13,7 @@
 #define FREE_ARRAY(type, ptr, old_sz) \
   (type*)reallocate(ptr, sizeof(type) * old_sz, 0);
 
-#define GROW_CAPACITY(old_capa) (old_capa < 8) ? 8 : old_capa * 2
+#define GROW_CAPACITY(old_capa) (old_capa < 32) ? 32 : old_capa * 2
 
 #define BIT_WIDTH(type) sizeof(type) * 8
 

@@ -93,8 +93,6 @@ typedef struct {
   Table fields;
 } InstanceObj;
 
-#define OBJ_TYPE(obj) ((obj.type == VAL_OBJ) ? AS_OBJ(obj)->type : OBJ_NONE)
-
 #define IS_STRING_OBJ(value) (is_obj_type(value, OBJ_STRING))
 #define IS_FUNCTION_OBJ(value) (is_obj_type(value, OBJ_FUNCTION))
 #define IS_CLOSURE_OBJ(value) (is_obj_type(value, OBJ_CLOSURE))
@@ -130,13 +128,11 @@ InstanceObj* InstanceObj_construct(ClassObj* klass);
 BoundMethodObj* BoundMethodObj_construct(Value receiver, ClosureObj* method);
 
 /* print_object: print the string representation of an object */
-void print_object(Value);
-
+void print_object(Obj*);
 uint32_t hash_string(const char*, int);
-
 void* allocate_object(size_t size, ObjType type);
-
 /** Object's specific supporting functions. */
 Value InstanceObj_get_property(InstanceObj* instance, StringObj* property_name);
+bool object_equal(Obj* obj1, Obj* obj2);
 
 #endif

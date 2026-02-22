@@ -56,3 +56,5 @@ bin/
 
 .cache
 compile_commands.json
+
+perf.data*

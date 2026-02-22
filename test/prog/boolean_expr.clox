@@ -1,0 +1,38 @@
+print "== test: simple boolean expressions ==";
+
+print true;
+print false;
+print true and true and false; // false
+print false and true and true; // false
+print true and true and true; // true
+print false or true; //true
+print false or true or false; // true
+print false or false or false or true; // true
+print 1 == 2 or 2 == 3 or 3 == 4 or 4 == 4 or 1 != 2; // true
+print 1 == 2 or 2 == 3 or 3 == 4 or 4 == 5; // false
+print false or true and false or true and true or false and true; // true
+print false or false and false or false and false and false or true; // true
+print false or false and false or false and false and false or false; // false
+print false and true or false or false; // false
+print "hello world" == "hello world"; // true
+print "hello" != "hello" or "hello" == "hello"; // true
+print "hel" + "lo" != "hello" or false or false or "he" + "llo" == "hello"; // true
+print 12 < 23 or 12 > 12; // true
+print 12 < 12 or 13 < 13 and 13 == 13 or 12 <= 12; // true
+
+print "== test: truthy and falsey ==";
+
+print nil or nil or nil; // nil
+print nil and true; // nil
+print nil and nil; // nil
+print nil or true; // true
+print nil or nil or nil or 123; // 123
+print nil and true or nil or true; // true
+print nil and true or nil or false; // false
+print 1 or 1 or 2.3; // 2.3
+print false or nil and false or 365.12;  // 365.12
+print false or false or 143 or false; // 143
+print false and false and 134; // false
+print "abc" and "def" and "ghi" and "jkl"; // jkl
+print "abc" or "def" or "ghi"; // abc
+print true and true and false or false or "abc" + "def"; // abcdef
